@@ -27,7 +27,7 @@ if __name__ == "__main__":
     start = time.time()
 
     # setup input arguments
-    params = setupArgs()["TRAIN"]
+    params = setupArgs()["TRAINING"]
     
     data_path = params["DATA_PATH"]
     batch_size = int(params["BATCH_SIZE"])
