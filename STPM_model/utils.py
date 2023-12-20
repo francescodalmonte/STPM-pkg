@@ -5,25 +5,40 @@ from sklearn.metrics import roc_curve, precision_recall_curve, auc
 
 
 
-def plot_examples(dataloader, N=10):
+def plot_examples(dataloader, N=10, save_to=None):
     fig, ax = plt.subplots(ncols=N, nrows=2, figsize=(N*1.5,3), tight_layout=True)
     x, y, mask = next(iter(dataloader))
     for i in range(N):
         ax[0,i].imshow(x[i][0], cmap="Greys"); ax[0,i].axis("off")
         ax[0,i].text(s=f"{y[i].numpy()}", x=10, y=10, verticalalignment="top", fontsize=14)
         ax[1,i].imshow(mask[i][0], cmap="Greys_r"); ax[1,i].axis("off")
+    if save_to is not None:
+        fig.savefig(save_to)
 
 
 
-def plot_examples_histograms(dataloader, N=4):
+def plot_examples_histograms(dataloader, N=4, save_to=None):
     fig, ax = plt.subplots(nrows=1, ncols=N, figsize=(N*2.5,1.6), tight_layout=True)
     x, y, mask = next(iter(dataloader))
     for i in range(N):
         ax[i].hist(x[i][0].reshape(-1)[:], bins=15)
+    if save_to is not None:
+        fig.savefig(save_to)
 
 
+def plot_training_loss(train_dict, save_to=None):
+    fig, ax = plt.subplots(figsize=(5,4))
+    ax.set_title("train (blue) and val (orange) losses during training")
+    ax.plot(train_dict["losses_train"], c="tab:blue")
+    ax.plot(train_dict["losses_val"], c="tab:orange")
+    ax.set_yscale("log")
+    ax.set_xlabel("epochs")
+    ax.set_ylabel("loss")
+    if save_to is not None:
+        fig.savefig(save_to)
 
-def plot_multi_hist(ax, data, labels, title, **kwargs):
+
+def plot_hist_on_ax(ax, data, labels, title, **kwargs):
     limits = [np.min(data), np.max(data)]
     ax.hist(data[labels==0], color="tab:blue",
             range=limits, density=True, **kwargs)
@@ -31,8 +46,14 @@ def plot_multi_hist(ax, data, labels, title, **kwargs):
             range=limits, density=True, **kwargs)
     ax.set_title(title)
 
+def plot_multi_hist(results, save_to=None):
+    fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(8,3.5), tight_layout=True)
+    plot_hist_on_ax(ax[0], results["avg_anomaly"], results["labels"], "anomaly map AVG value", bins=20, alpha=0.5)
+    plot_hist_on_ax(ax[1], results["anomaly_peak"], results["labels"], "anomaly map PEAK value", bins=20, alpha=0.5)
+    if save_to is not None:
+        fig.savefig(save_to)
 
-    
+
 def plot_roc_curve(ax, data, labels, title, **kwargs):
     # Compute ROC curve
     fpr, tpr, thresholds = roc_curve(labels, data)
@@ -65,8 +86,18 @@ def plot_pr_curve(ax, data, labels, title, **kwargs):
             transform=ax.transAxes, fontsize=10)
     
 
+def plot_multi_curves(results, save_to=None):
+    fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(8,7), tight_layout=True)
+    plot_roc_curve(ax[0,0], results["avg_anomaly"], results["labels"], "anomaly map AVG value")
+    plot_roc_curve(ax[0,1], results["anomaly_peak"], results["labels"], "anomaly map PEAK value")
+    plot_pr_curve(ax[1,0], results["avg_anomaly"], results["labels"], "anomaly map AVG value")
+    plot_pr_curve(ax[1,1], results["anomaly_peak"], results["labels"], "anomaly map PEAK value")
+    if save_to is not None:
+        fig.savefig(save_to)
 
-def plot_results_examples(results, N=10):
+
+
+def plot_results_examples(results, N=10, save_to=None):
 
     idxs_0 =  np.nonzero(results['labels']==0)[0]
     idxs_1 = np.nonzero(results['labels']==1)[0]
@@ -76,25 +107,31 @@ def plot_results_examples(results, N=10):
 
 
     # normal examples
-    fig, ax = plt.subplots(ncols=N, nrows=3, figsize=(N*1.3, 3.9), tight_layout=True)
+    fig1, ax1 = plt.subplots(ncols=N, nrows=3, figsize=(N*1.3, 3.9), tight_layout=True)
     for i in range(N):
         idx = idxs_0[i]
-        ax[0,i].imshow(results["inputs"][idx][0], cmap="Greys")
-        ax[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
-        ax[1,i].imshow(results["masks"][idx], cmap="Greys_r")
-        ax[2,i].imshow(results["anomaly_maps"][idx], cmap="jet", vmin=vmin, vmax=vmax);
-        ax[0,i].axis("off")
-        ax[1,i].axis("off")
-        ax[2,i].axis("off")
+        ax1[0,i].imshow(results["inputs"][idx][0], cmap="Greys")
+        ax1[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
+        ax1[1,i].imshow(results["masks"][idx], cmap="Greys_r")
+        ax1[2,i].imshow(results["anomaly_maps"][idx], cmap="jet", vmin=vmin, vmax=vmax);
+        ax1[0,i].axis("off")
+        ax1[1,i].axis("off")
+        ax1[2,i].axis("off")
 
     # anomalous examples
-    fig, ax = plt.subplots(ncols=N, nrows=3, figsize=(N*1.3, 3.9), tight_layout=True)
+    fig2, ax2 = plt.subplots(ncols=N, nrows=3, figsize=(N*1.3, 3.9), tight_layout=True)
     for i in range(N):
         idx = idxs_1[i]
-        ax[0,i].imshow(results["inputs"][idx][0], cmap="Greys")
-        ax[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
-        ax[1,i].imshow(results["masks"][idx], cmap="Greys_r")
-        ax[2,i].imshow(results["anomaly_maps"][idx], cmap="jet", vmin=vmin, vmax=vmax);
-        ax[0,i].axis("off")
-        ax[1,i].axis("off")
-        ax[2,i].axis("off")
+        ax2[0,i].imshow(results["inputs"][idx][0], cmap="Greys")
+        ax2[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
+        ax2[1,i].imshow(results["masks"][idx], cmap="Greys_r")
+        ax2[2,i].imshow(results["anomaly_maps"][idx], cmap="jet", vmin=vmin, vmax=vmax);
+        ax2[0,i].axis("off")
+        ax2[1,i].axis("off")
+        ax2[2,i].axis("off")
+
+    if save_to is not None:
+        splitted = os.path.splitext(save_to)
+        fig1.savefig(splitted[0]+"_normal"+splitted[1])
+        fig2.savefig(splitted[0]+"_anomalous"+splitted[1])
+        

@@ -153,13 +153,14 @@ def train_loop(model_t,
                num_epochs,
                optimizer,
                name_train,
+               save_to,
                log_interval=-1,
                lr_scheduler=None,
                verbose=True):
     """Executes the training-evaluation loop."""
 
-    if not os.path.exists('checkpoints'):
-        os.makedirs('checkpoints')
+    if not os.path.isdir(os.path.join(save_to,'checkpoints')):
+        os.mkdir(os.path.join(save_to, 'checkpoints'))
 
     losses_train = []
     losses_val = []
@@ -188,7 +189,7 @@ def train_loop(model_t,
         # save checkpoint if perfosmances improved on val set
         if val_dict["avg_loss"] < best_val:
             best_val = val_dict["avg_loss"]
-            torch.save(model_s.state_dict(), f"checkpoints/{name_train}.ckpt")
+            torch.save(model_s.state_dict(), os.path.join(save_to, f"checkpoints/{name_train}.ckpt"))
             msg = " (**ckpt)"
         else:
             msg = " "
