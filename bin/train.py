@@ -3,6 +3,8 @@ import os
 import time
 import configparser
 
+from torch import cuda
+
 from STPM_model.dataset import FilterClothsDataset
 
 def setupArgs():
@@ -23,6 +25,7 @@ if __name__ == "__main__":
     # setup input arguments
     config = setupArgs()["DEFAULT"]
 
+    device = "cuda" if cuda.is_available() else "cpu"
 
 
     print(f"Elapsed time: {(time.time()-start):2f} s")
