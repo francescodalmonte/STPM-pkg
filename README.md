@@ -1,4 +1,4 @@
-# STPM - Student-Teacher features Pyramyd Matching for Anomaly Detection
+# STPM - Student-Teacher features Pyramid Matching for Anomaly Detection
 
 Unofficial implementation of the STPM model for unsupervised AD from the 2021 paper by G. Wang et al. [Student-Teacher Feature Pyramid Matching for Unsupervised Anomaly Detection
 Student-Teacher Feature Pyramid Matching for Unsupervised Anomaly Detection](https://arxiv.org/abs/2103.04257v2).
