@@ -43,7 +43,7 @@ if __name__ == "__main__":
     gamma = float(params["LR_SCHEDULER_GAMMA"])
 
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda:1" if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
 
     # instantiate train and test datasets

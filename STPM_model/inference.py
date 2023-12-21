@@ -57,8 +57,8 @@ def save_anomaly_heatmap(coords_set: np.ndarray,
     h = anomaly_scores_set.reshape(len(np.unique(coords_set[:,1])), len(np.unique(coords_set[:,0])))
         
     fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8,12), dpi=600)
-    ax[0].imshow(h, vmin = 0., vmax = 2.); ax[0].set_title("Anomaly scores")
-    ax[1].imshow(np.sqrt(h), vmin = 0., vmax = 2.); ax[1].set_title("Anomaly scores (sqrt)")
+    ax[0].imshow(h, vmin = 0., vmax = 0.5); ax[0].set_title("Anomaly scores")
+    ax[1].imshow(np.sqrt(h), vmin = 0., vmax = 0.5); ax[1].set_title("Anomaly scores (sqrt)")
     
     plt.savefig(save_path)
 

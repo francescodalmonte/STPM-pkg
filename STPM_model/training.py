@@ -58,7 +58,7 @@ def compute_anomaly_maps(t_features,
                          s_features,
                          out_size: int = 224):
     """Compute anomaly maps by interpolating the features-distance maps
-    at different levels of the "pyramid""."""
+    at different levels of the "pyramid"."""
 
     anomaly_maps = []
 
