@@ -89,7 +89,8 @@ if __name__ == "__main__":
             features_s = student_net(x.to(device))
 
             a_map = compute_anomaly_maps(features_s, features_t)
-#            a_map = gaussian_filter(a_map, sigma=3)
+            a_map = gaussian_filter(a_map, sigma=3)
+            a_map = ((15*a_map)**3)/15
 
             anomaly_maps.append(a_map)
 
@@ -139,7 +140,12 @@ if __name__ == "__main__":
                                    sorted_coords,
                                    sorted_anomaly_peaks,
                                    os.path.join(save_path, "annotated_image.png"),
-                                   threshold = 0.105)
+                                   threshold = 0.2)
 
+    inference.compose_anomalyImage(sorted_anomaly_maps,
+                                   sorted_coords,
+                                   save_path=os.path.join(save_path, "anomaly_heatmap_tot.png"),
+                                   image_shape=[7750,2048],
+                                   crop_size=224)
 
 

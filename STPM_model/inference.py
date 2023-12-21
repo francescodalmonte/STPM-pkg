@@ -2,6 +2,7 @@ import os
 import numpy as np 
 from matplotlib import pyplot as plt
 import cv2 as cv
+from scipy.ndimage import gaussian_filter, median_filter
 
 from preprocessing_tele.multiChannelImage import multiChannelImage
 from preprocessing_tele.image_processing import tileImage
@@ -128,6 +129,7 @@ def read_infotxt(path: str,
 
 def compose_anomalyImage(anomaly_maps: np.ndarray,
                          coords: np.ndarray,
+                         save_path: str,
                          image_shape: list,
                          crop_size: int):
     """
@@ -145,8 +147,10 @@ def compose_anomalyImage(anomaly_maps: np.ndarray,
         count[left:right, top:bottom]+=1
 
     anomaly_image = (np.divide(anomaly_image, count, where=count!=0))
-
-    return anomaly_image
+    anomaly_image = (256*anomaly_image).astype(np.uint8)
+    anomaly_image = gaussian_filter(anomaly_image, sigma=4)
+    # save image to file
+    cv.imwrite(save_path, anomaly_image)
 
 
 

@@ -22,10 +22,7 @@ def setupArgs():
     return config
 
 
-
-if __name__ == "__main__":
-    start = time.time()
-
+def train_model():
     # setup input arguments
     params = setupArgs()["TRAINING"]
     
@@ -140,5 +137,11 @@ if __name__ == "__main__":
     utils.plot_multi_curves(results, save_to=os.path.join(save_path, "curves.png"))
     # save examples of heatmaps
     utils.plot_results_examples(results, N=8, save_to=os.path.join(save_path, "results_examples.png"))
+
+
+if __name__ == "__main__":
+    start = time.time()
+
+    train_model()
 
     print(f"Elapsed time: {(time.time()-start):2f} s")
