@@ -40,7 +40,7 @@ def train_model():
     gamma = float(params["LR_SCHEDULER_GAMMA"])
 
 
-    device = "cuda:1" if torch.cuda.is_available() else "cpu"
+    device = params["DEVICE"] if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
 
     # instantiate train and test datasets

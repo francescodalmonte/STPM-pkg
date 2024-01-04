@@ -29,7 +29,7 @@ class FilterClothsDataset(Dataset):
                                                          std=[50., 50., 50.]),
                                             T2.RandomHorizontalFlip(p=0.5),
                                             T2.RandomVerticalFlip(p=0.5),
-                                            T2.RandomResizedCrop(resize, scale=(0.3, 1.0), ratio=(0.8, 1.2))
+                                            T2.RandomResizedCrop(resize, scale=(0.9, 1.0), ratio=(0.95, 1.05))
                                             ])
         else:
             self.transform_v2 = T2.Compose([T2.Resize(resize, Image.BILINEAR),

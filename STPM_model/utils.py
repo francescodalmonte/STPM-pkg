@@ -107,8 +107,9 @@ def plot_results_examples(results, N=10, save_to=None):
 
 
     # normal examples
-    fig1, ax1 = plt.subplots(ncols=N, nrows=3, figsize=(N*1.3, 3.9), tight_layout=True)
-    for i in range(N):
+    N_0 = np.min([N, len(idxs_0)])
+    fig1, ax1 = plt.subplots(ncols=N_0, nrows=3, figsize=(N_0*1.3, 3.9), tight_layout=True)
+    for i in range(N_0):
         idx = idxs_0[i]
         ax1[0,i].imshow(results["inputs"][idx][0], cmap="Greys")
         ax1[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
@@ -119,8 +120,9 @@ def plot_results_examples(results, N=10, save_to=None):
         ax1[2,i].axis("off")
 
     # anomalous examples
-    fig2, ax2 = plt.subplots(ncols=N, nrows=3, figsize=(N*1.3, 3.9), tight_layout=True)
-    for i in range(N):
+    N_1 = np.min([N, len(idxs_1)])
+    fig2, ax2 = plt.subplots(ncols=N_1, nrows=3, figsize=(N_1*1.3, 3.9), tight_layout=True)
+    for i in range(N_1):
         idx = idxs_1[i]
         ax2[0,i].imshow(results["inputs"][idx][0], cmap="Greys")
         ax2[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
