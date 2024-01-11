@@ -28,6 +28,8 @@ def train_model():
     
     data_path = params["DATA_PATH"]
     batch_size = int(params["BATCH_SIZE"])
+    crop_size = int(params["CROP_SIZE"])
+    checkpoint = params["CHECKPOINT_PATH"]
     num_workers = int(params["N_WORKERS"])
     pin_memory = params["PIN_MEMORY"] is True
     save_path = params["SAVE_PATH"]
@@ -39,19 +41,21 @@ def train_model():
     lr_scheduler_steps = [int(s) for s in params["LR_SCHEDULER_STEPS"].split(",")]
     gamma = float(params["LR_SCHEDULER_GAMMA"])
 
-
     device = params["DEVICE"] if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
+
+    # save configuration file
+    utils.save_config_info(os.path.join(save_path, "TRAIN_CONFIG.txt"), dict(params))
 
     # instantiate train and test datasets
     train_ds_tot = FilterClothsDataset(data_path,
                                        is_train=True,
-                                       resize=224,
-                                       cropsize=224)
+                                       resize=crop_size,
+                                       cropsize=crop_size)
     test_ds = FilterClothsDataset(data_path,
                                   is_train=False,
-                                  resize=224,
-                                  cropsize=224)
+                                  resize=crop_size,
+                                  cropsize=crop_size)
 
     # validation split
     # (in an AD task usually there is no risk of overtraining. However, a validation set
@@ -79,13 +83,24 @@ def train_model():
                                           pin_memory=pin_memory)
 
     # plot some examples and histograms
-    utils.plot_examples(train_dl, N=8, save_to=os.path.join(save_path, "examples_train_dl.png"))
-    utils.plot_examples(test_dl, N=8, save_to=os.path.join(save_path, "examples_test_dl.png"))
+    utils.plot_examples(train_dl, N=10, save_to=os.path.join(save_path, "examples_train_dl.png"))
+    utils.plot_examples(test_dl, N=10, save_to=os.path.join(save_path, "examples_test_dl.png"))
+    utils.plot_examples_histograms(train_dl, N=10, save_to=os.path.join(save_path, "examplesHist_train_dl.png"))
+    utils.plot_examples_histograms(test_dl, N=10, save_to=os.path.join(save_path, "examplesHist_test_dl.png"))
 
 
     # instantiate models
     teacher_net = modified_resnet18(pretrained=True).to(device)
     student_net = modified_resnet18(pretrained=False).to(device)
+
+    if len(checkpoint)>0:
+        if os.path.isfile(checkpoint):
+            student_net.load_state_dict(torch.load(checkpoint))
+            if not os.path.isdir(os.path.join(save_path, f"checkpoints")):
+                os.mkdir(os.path.join(save_path, f"checkpoints"))
+            torch.save(student_net.state_dict(), os.path.join(save_path, f"checkpoints/{name_train}.ckpt"))
+        else:
+            print(f"No checkpoint file ound at {checkpoint}")
 
     for param in teacher_net.parameters():
         param.requires_grad = False
@@ -136,7 +151,9 @@ def train_model():
     utils.plot_multi_hist(results, save_to=os.path.join(save_path, "anomaly_histograms.png"))
     utils.plot_multi_curves(results, save_to=os.path.join(save_path, "curves.png"))
     # save examples of heatmaps
-    utils.plot_results_examples(results, N=8, save_to=os.path.join(save_path, "results_examples.png"))
+    utils.plot_results_examples(results, N=20, save_to=os.path.join(save_path, "results_examples.png"))
+    utils.plot_best_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_best.png"))
+    utils.plot_worst_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_worst.png"))
 
 
 if __name__ == "__main__":

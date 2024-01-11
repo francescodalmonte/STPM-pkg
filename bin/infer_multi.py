@@ -9,6 +9,7 @@ import torch
 
 from preprocessing_tele.image_processing import saveCrops
 from preprocessing_tele.dataset import conditionalMkDir
+from preprocessing_tele.multiChannelImage import multiChannelImage
 
 from STPM_model.model import modified_resnet18
 from STPM_model.training import compute_anomaly_maps
@@ -32,20 +33,23 @@ if __name__ == "__main__":
 
 
     # setup input arguments
-    params = setupArgs()["INFERENCE"]
+    params = setupArgs()["INFERENCE_MULTI"]
 
-    ckpt_path = params["CKPT_PATH"]
+    ckpt_path_R1 = params["CKPT_PATH_R1"]
+    ckpt_path_R3 = params["CKPT_PATH_R3"]
+    mask_path_R1 = params["MASK_PATH_R1"]
+    mask_path_R3 = params["MASK_PATH_R3"]
     input_path = params["INPUT_PATH"]
     input_name = params["INPUT_NAME"]
     save_path = params["SAVE_PATH"]
     overlap = int(params["OVERLAP"])
-    mode = params["MODE"]
-    minuend = int(params["MINUEND"])
-    subtrahend = int(params["SUBTRAHEND"])
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
 
+    mcImg = multiChannelImage(input_name, input_path)
+    mask_R1 = mcImg.__get_allignedRegionMask__(mask_path_R1, scale=1.)
+    mask_R3 = mcImg.__get_allignedRegionMask__(mask_path_R3, scale=1.)
 
 
     # TILE INPUT IMAGE, SAVE CROPS TO FILE
@@ -54,10 +58,7 @@ if __name__ == "__main__":
                                                       root_path = input_path,
                                                       size = 224,
                                                       overlap = overlap,
-                                                      scale = 1.,
-                                                      mode = mode,
-                                                      minuend = minuend,
-                                                      subtrahend = subtrahend)
+                                                      scale = 1.)
     
     conditionalMkDir(save_path)
     conditionalMkDir(os.path.join(save_path, "crops"))
@@ -74,14 +75,18 @@ if __name__ == "__main__":
 
     # load model checkpoint
     teacher_net = modified_resnet18(pretrained=True).to(device)
-    student_net = modified_resnet18(pretrained=False).to(device)
+    student_net_R1 = modified_resnet18(pretrained=False).to(device)
+    student_net_R3 = modified_resnet18(pretrained=False).to(device)
 
     for param in teacher_net.parameters():
         param.requires_grad = False
     _ = teacher_net.eval()
-    _ = student_net.eval()
+    _ = student_net_R1.eval()
+    _ = student_net_R3.eval()
 
-    student_net.load_state_dict(torch.load(ckpt_path))
+    student_net_R1.load_state_dict(torch.load(ckpt_path_R1))
+    student_net_R3.load_state_dict(torch.load(ckpt_path_R3))
+
 
     # inference
     anomaly_maps = []
@@ -91,7 +96,12 @@ if __name__ == "__main__":
         for i, x in enumerate(torch.Tensor(inputs)):
             # forward pass
             features_t = teacher_net(x.to(device))
-            features_s = student_net(x.to(device))
+            if mask_R1[coords[i][1], coords[i][0]]:
+                features_s = student_net_R1(x.to(device))
+            elif mask_R3[coords[i][1], coords[i][0]]:
+                features_s = student_net_R3(x.to(device))
+            else:
+                features_s = student_net_R3(x.to(device))
 
             a_map = compute_anomaly_maps(features_s, features_t)
             a_map = gaussian_filter(a_map, sigma=3)

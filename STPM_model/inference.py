@@ -12,12 +12,21 @@ def tile_input_image(name: str,
                      root_path: str,
                      size: int = 224, 
                      overlap: int = 0,
-                     scale: float = 1.
+                     scale: float = 1.,
+                     mode: str = "diff",
+                     minuend: int = 2,
+                     subtrahend: int = 1
                      ):
     
     print("Tiling image")
     object = multiChannelImage(name, root_path)
-    image = object.__get_diffImage__(scale = scale, minuend = 3, subtrahend = 0)
+    # images
+    if mode == "diff":
+        image = object.__get_diffImage__(scale = scale, minuend = minuend, subtrahend = subtrahend)
+    elif mode in ["0", "1", "2", "3", "4"]:
+        image = object.__get_images__(scale = scale)[int(mode)]
+    else:
+        raise(ValueError("Invalid argument: mode"))
 
     tiles, coords = tileImage(image, size, overlap, gauss_blur = .0)
     tiles = np.stack((tiles, tiles, tiles)).transpose(1,2,3,0)
