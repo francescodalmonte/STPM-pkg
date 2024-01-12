@@ -6,7 +6,7 @@ from torchvision.models.resnet import ResNet18_Weights
 
 class MResNet18(nn.Module):
     def __init__(self, block, layers, num_classes=1000, groups=1,
-                 width_per_group=64, downscale=False):
+                 width_per_group=64, out_features = ["1","2","3","4"], downscale=False):
         super(MResNet18, self).__init__()
 
         self._norm_layer = nn.BatchNorm2d
@@ -25,6 +25,7 @@ class MResNet18(nn.Module):
         # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # self.fc = nn.Linear(512 * block.expansion, num_classes)
         self.downscale = downscale
+        self.out_features = out_features
 
 
         # modules initialization
@@ -75,7 +76,9 @@ class MResNet18(nn.Module):
         x3 = self.layer3(x2)
         x4 = self.layer4(x3)
 
-        return x1, x2, x3, x4
+        xs = {"1": x1, "2": x2, "3": x3, "4": x4}
+
+        return [xs[f] for f in self.out_features]
     
 
 

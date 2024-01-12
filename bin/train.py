@@ -47,6 +47,7 @@ def train_model():
         os.mkdir(save_path)
     name_train = params["NAME_TRAIN"]
     num_epochs = int(params["N_EPOCHS"])
+    out_features = [f.strip() for f in params["OUT_FEATURES"].split(",")]
     lr = float(params["LR"])
     lr_scheduler_steps = [int(s) for s in params["LR_SCHEDULER_STEPS"].split(",")]
     gamma = float(params["LR_SCHEDULER_GAMMA"])
@@ -105,8 +106,8 @@ def train_model():
 
     # instantiate models
     print("Instantiating models...")
-    teacher_net = modified_resnet18(pretrained=True).to(device)
-    student_net = modified_resnet18(pretrained=False).to(device)
+    teacher_net = modified_resnet18(pretrained=True, out_features=out_features).to(device)
+    student_net = modified_resnet18(pretrained=False, out_features=out_features).to(device)
 
     if len(checkpoint)>0:
         if os.path.isfile(checkpoint):
