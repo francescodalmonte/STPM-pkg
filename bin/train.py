@@ -2,6 +2,7 @@ import numpy as np
 import os
 import time
 import configparser
+import argparse
 
 import torch
 
@@ -12,13 +13,22 @@ from STPM_model.training import train_loop, test_student_model
 
 
 def setupArgs():
+    parser = argparse.ArgumentParser()
     config = configparser.ConfigParser()
-    config_path = os.path.join(os.path.dirname(__file__), "config.INI")
+
+    parser.add_argument("--config",
+                        type=str,
+                        help="Absolute filepath of config (.INI) file (default: ./config.INI)",
+                        default=os.path.join(os.path.dirname(__file__), "config.INI")
+                        )
+
+    config_path = parser.parse_args().config
+
     if os.path.isfile(config_path):
         config.read(config_path)
     else:
         raise ValueError(f"can't find configuration file {config_path}")
-    
+
     return config
 
 
@@ -83,8 +93,8 @@ def train_model():
     test_dl = torch.utils.data.DataLoader(test_ds,
                                           batch_size=batch_size,
                                           shuffle=False,
-                                          num_workers=num_workers,
-                                          pin_memory=pin_memory)
+                                          num_workers=0,
+                                          pin_memory=False)
 
     # plot some examples and histograms
     #utils.plot_examples(train_dl, N=4, save_to=os.path.join(save_path, "examples_train_dl.png"))
