@@ -48,6 +48,7 @@ def train_model():
     utils.save_config_info(os.path.join(save_path, "TRAIN_CONFIG.txt"), dict(params))
 
     # instantiate train and test datasets
+    print("Creating datasets and dataloaders...")
     train_ds_tot = FilterClothsDataset(data_path,
                                        is_train=True,
                                        resize=crop_size,
@@ -64,6 +65,9 @@ def train_model():
     valid_num = int(img_nums * 0.1)
     train_num = img_nums - valid_num
     train_ds, val_ds = torch.utils.data.random_split(train_ds_tot, [train_num, valid_num])
+
+    print(f"Train/val ds sizes: {len(train_ds)}/{len(val_ds)}")
+    print(f"Test ds size: {len(test_ds)}")
 
     # dataloaders
     train_dl = torch.utils.data.DataLoader(train_ds,
@@ -83,13 +87,14 @@ def train_model():
                                           pin_memory=pin_memory)
 
     # plot some examples and histograms
-    utils.plot_examples(train_dl, N=10, save_to=os.path.join(save_path, "examples_train_dl.png"))
-    utils.plot_examples(test_dl, N=10, save_to=os.path.join(save_path, "examples_test_dl.png"))
-    utils.plot_examples_histograms(train_dl, N=10, save_to=os.path.join(save_path, "examplesHist_train_dl.png"))
-    utils.plot_examples_histograms(test_dl, N=10, save_to=os.path.join(save_path, "examplesHist_test_dl.png"))
+    #utils.plot_examples(train_dl, N=4, save_to=os.path.join(save_path, "examples_train_dl.png"))
+    #utils.plot_examples(test_dl, N=4, save_to=os.path.join(save_path, "examples_test_dl.png"))
+    #utils.plot_examples_histograms(train_dl, N=4, save_to=os.path.join(save_path, "examplesHist_train_dl.png"))
+    #utils.plot_examples_histograms(test_dl, N=4, save_to=os.path.join(save_path, "examplesHist_test_dl.png"))
 
 
     # instantiate models
+    print("Instantiating models...")
     teacher_net = modified_resnet18(pretrained=True).to(device)
     student_net = modified_resnet18(pretrained=False).to(device)
 

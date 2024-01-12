@@ -32,7 +32,7 @@ class FilterClothsDataset(Dataset):
                                             T2.ColorJitter(brightness=.4, contrast=[.4, 2.]),
                                             T2.RandomHorizontalFlip(p=0.5),
                                             T2.RandomVerticalFlip(p=0.5),
-                                            T2.RandomResizedCrop(resize, scale=(0.25, 1.0), ratio=(0.8, 1.2))
+                                            T2.RandomResizedCrop(resize, scale=(0.75, 1.0), ratio=(0.8, 1.2))
                                             ])
         else:
             self.transform_v2 = T2.Compose([#T2.Resize(resize, Image.BILINEAR),
@@ -48,6 +48,7 @@ class FilterClothsDataset(Dataset):
         else:
             mask = Image.open(mask).convert("L")
         mask = tv_tensors.Mask(mask)
+        y = torch.tensor(y, dtype=torch.long)
 
         x = Image.open(x).convert('RGB')
         x = tv_tensors.Image(x)

@@ -158,7 +158,8 @@ def train_loop(model_t,
                lr_scheduler=None,
                verbose=True):
     """Executes the training-evaluation loop."""
-
+    print("Training loop started")
+    
     if not os.path.isdir(os.path.join(save_to,'checkpoints')):
         os.mkdir(os.path.join(save_to, 'checkpoints'))
 
