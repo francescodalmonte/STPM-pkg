@@ -11,4 +11,4 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-Author: Francesco Dalmonte, PhD student @ DIFA - UniversitÃ  di Bologna
+Author: Francesco Dalmonte, PhD student @ DIFA - Università  di Bologna
