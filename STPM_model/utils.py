@@ -10,7 +10,7 @@ def plot_examples(dataloader, N=10, save_to=None):
     N=np.min([len(x), N])
     fig, ax = plt.subplots(ncols=N, nrows=2, figsize=(N*1.5,3), tight_layout=True)
     for i in range(N):
-        ax[0,i].imshow(x[i][0], cmap="Greys_r", vmin=0., vmax=1.); ax[0,i].axis("off")
+        ax[0,i].imshow(np.transpose(x[i], (1,2,0))); ax[0,i].axis("off")
         ax[0,i].text(s=f"{y[i].numpy()}", x=10, y=10, verticalalignment="top", fontsize=14)
         ax[1,i].imshow(mask[i][0], cmap="Greys_r"); ax[1,i].axis("off")
     if save_to is not None:
@@ -57,7 +57,7 @@ def plot_multi_hist(results, save_to=None):
         fig.savefig(save_to)
 
 
-def plot_roc_curve(ax, data, labels, title, **kwargs):
+def plot_roc_curve(ax, data, labels, title, log=False, **kwargs):
     # Compute ROC curve
     fpr, tpr, thresholds = roc_curve(labels, data)
     # Compute AUC
@@ -66,6 +66,8 @@ def plot_roc_curve(ax, data, labels, title, **kwargs):
     ax.plot(fpr, tpr, **kwargs)
     ax.set_xlabel("FP rate")
     ax.set_ylabel("TP rate")
+    if log:
+        ax.set_xscale("log")
     ax.set_title(title)
     ax.text(s = f"AUROC = {roc_auc:.5f}", x=0.95, y=0.03,
             horizontalalignment='right', verticalalignment='bottom',
@@ -90,9 +92,10 @@ def plot_pr_curve(ax, data, labels, title, **kwargs):
     
 
 def plot_multi_curves(results, save_to=None):
-    fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(8,7), tight_layout=True)
+    fig, ax = plt.subplots(ncols=3, nrows=2, figsize=(12,7), tight_layout=True)
     plot_roc_curve(ax[0,0], results["avg_anomaly"], results["labels"], "anomaly map AVG value")
     plot_roc_curve(ax[0,1], results["anomaly_peak"], results["labels"], "anomaly map PEAK value")
+    plot_roc_curve(ax[0,2], results["anomaly_peak"], results["labels"], "anomaly map PEAK value (logx)", log=True)
     plot_pr_curve(ax[1,0], results["avg_anomaly"], results["labels"], "anomaly map AVG value")
     plot_pr_curve(ax[1,1], results["anomaly_peak"], results["labels"], "anomaly map PEAK value")
     if save_to is not None:
