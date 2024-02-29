@@ -38,6 +38,7 @@ if __name__ == "__main__":
     input_path = params["INPUT_PATH"]
     input_name = params["INPUT_NAME"]
     save_path = params["SAVE_PATH"]
+    crop_size = int(params["CROP_SIZE"])
     overlap = int(params["OVERLAP"])
     mode = params["MODE"]
     minuend = int(params["MINUEND"])
@@ -52,7 +53,7 @@ if __name__ == "__main__":
     start = time.time()
     tiles, coords, image = inference.tile_input_image(name = input_name,
                                                       root_path = input_path,
-                                                      size = 224,
+                                                      size = crop_size,
                                                       overlap = overlap,
                                                       scale = 1.,
                                                       mode = mode,
@@ -93,7 +94,7 @@ if __name__ == "__main__":
             features_t = teacher_net(x.to(device))
             features_s = student_net(x.to(device))
 
-            a_map = compute_anomaly_maps(features_s, features_t)
+            a_map = compute_anomaly_maps(features_s, features_t, out_size=crop_size)
             a_map = gaussian_filter(a_map, sigma=3)
             a_map = ((15*a_map)**3)/15
 
@@ -141,7 +142,7 @@ if __name__ == "__main__":
                                    os.path.join(save_path, "anomaly_heatmap.png"))
         
     inference.save_annotated_image(image,
-                                   224,
+                                   crop_size,
                                    sorted_coords,
                                    sorted_anomaly_peaks,
                                    os.path.join(save_path, "annotated_image.png"),
@@ -151,6 +152,6 @@ if __name__ == "__main__":
                                    sorted_coords,
                                    save_path=os.path.join(save_path, "anomaly_heatmap_tot.png"),
                                    image_shape=[7750,2048],
-                                   crop_size=224)
+                                   crop_size=crop_size)
 
 
