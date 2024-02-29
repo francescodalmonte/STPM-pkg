@@ -73,7 +73,7 @@ def train_model():
     # (in an AD task usually there is no risk of overtraining. However, a validation set
     # can used to assess the model capability to generalize its behaviour to new normal samples)
     img_nums = len(train_ds_tot)
-    valid_num = int(img_nums * 0.1)
+    valid_num = int(img_nums * 0.25)
     train_num = img_nums - valid_num
     train_ds, val_ds = torch.utils.data.random_split(train_ds_tot, [train_num, valid_num])
 
@@ -98,8 +98,8 @@ def train_model():
                                           pin_memory=False)
 
     # plot some examples and histograms
-    #utils.plot_examples(train_dl, N=4, save_to=os.path.join(save_path, "examples_train_dl.png"))
-    #utils.plot_examples(test_dl, N=4, save_to=os.path.join(save_path, "examples_test_dl.png"))
+    utils.plot_examples(train_dl, N=8, save_to=os.path.join(save_path, "examples_train_dl.png"))
+    utils.plot_examples(test_dl, N=8, save_to=os.path.join(save_path, "examples_test_dl.png"))
     #utils.plot_examples_histograms(train_dl, N=4, save_to=os.path.join(save_path, "examplesHist_train_dl.png"))
     #utils.plot_examples_histograms(test_dl, N=4, save_to=os.path.join(save_path, "examplesHist_test_dl.png"))
 
@@ -142,19 +142,10 @@ def train_model():
                             optimizer,
                             name_train,
                             save_path,
-                            log_interval=-1,
+                            log_interval=2,
                             lr_scheduler=lr_scheduler,
                             verbose=True)
     utils.plot_training_loss(train_dict, save_to=os.path.join(save_path, "training_loss.png"))
-
-
-    # load model checkpoint
-    teacher_net = modified_resnet18(pretrained=True).to(device)
-    student_net = modified_resnet18(pretrained=False).to(device)
-
-    for param in teacher_net.parameters():
-        param.requires_grad = False
-    _ = teacher_net.eval() # teacher model will always remain in eval mode
 
     student_net.load_state_dict(torch.load(os.path.join(save_path, f"checkpoints/{name_train}.ckpt")))
 
