@@ -24,18 +24,18 @@ class FilterClothsDataset(Dataset):
 
         # set_transforms
         if self.is_train:
-            self.transform_v2 = T2.Compose([#T2.Resize(resize, Image.BILINEAR),
+            self.transform_v2 = T2.Compose([T2.Resize(resize, Image.BILINEAR),
                                             T2.ToDtype(torch.float32, scale=True),
                                             #T2.Normalize(mean=[0.5, 0.5, 0.5], std=[1., 1., 1.])
                                             # augmentation
                                             T2.RandomAdjustSharpness(sharpness_factor=3),
-                                            T2.ColorJitter(brightness=.4, contrast=[.4, 2.]),
+                                            T2.ColorJitter(brightness=.1, contrast=[.8, 1.2]),
                                             T2.RandomHorizontalFlip(p=0.5),
                                             T2.RandomVerticalFlip(p=0.5),
-                                            T2.RandomResizedCrop(resize, scale=(0.75, 1.0), ratio=(0.8, 1.2))
+                                            T2.RandomResizedCrop(resize, scale=(0.85, 1.0), ratio=(0.85, 1.15))
                                             ])
         else:
-            self.transform_v2 = T2.Compose([#T2.Resize(resize, Image.BILINEAR),
+            self.transform_v2 = T2.Compose([T2.Resize(resize, Image.BILINEAR),
                                             T2.ToDtype(torch.float32, scale=True)
                                             #T2.Normalize(mean=[0.5, 0.5, 0.5], std=[1., 1., 1.])
                                             ])
