@@ -37,12 +37,11 @@ def test_multi_model():
     # setup input arguments
     params = setupArgs()["TEST_MULTI"]
     
-    data_path1 = params["DATA_PATH1"]
-    data_path2 = params["DATA_PATH2"]
+    data_paths = [p.strip() for p in params["DATA_PATHS"].split(",")]
+    checkpoint_paths = [p.strip() for p in params["CHECKPOINT_PATHS"].split(",")]
+
     batch_size = int(params["BATCH_SIZE"])
     crop_size = int(params["CROP_SIZE"])
-    checkpoint1 = params["CHECKPOINT_PATH1"]
-    checkpoint2 = params["CHECKPOINT_PATH2"]
 
     save_path = params["SAVE_PATH"]
     if not os.path.isdir(save_path):
@@ -56,45 +55,43 @@ def test_multi_model():
     # save configuration file
     utils.save_config_info(os.path.join(save_path, "TEST_CONFIG.txt"), dict(params))
 
-    # instantiate test datasets
+    # instantiate test datasets and dataloaders
     print("Creating dataset and dataloader...")
-    test_ds1 = FilterClothsDataset(data_path1,
-                                  is_train=False,
-                                  resize=crop_size,
-                                  cropsize=crop_size)
-    test_ds2 = FilterClothsDataset(data_path2,
-                                    is_train=False,
-                                    resize=crop_size,
-                                    cropsize=crop_size)
+    test_dss = []
+    test_dls = []
 
-    print(f"Test ds sizes: {len(test_ds1)}=={len(test_ds2)}")
 
-    # dataloaders
-    test_dl1 = torch.utils.data.DataLoader(test_ds1,
-                                          batch_size=batch_size,
-                                          shuffle=False,
-                                          num_workers=0,
-                                          pin_memory=False)
-    test_dl2 = torch.utils.data.DataLoader(test_ds2,
-                                          batch_size=batch_size,
-                                          shuffle=False,
-                                          num_workers=0,
-                                          pin_memory=False)
-    
-    # instantiate models
+    for i, data_path in enumerate(data_paths):
+        if not os.path.isdir(data_path):
+            raise ValueError(f"Data path {data_path} not found")
+        test_ds = FilterClothsDataset(data_path,
+                                       is_train=False,
+                                       resize=crop_size,
+                                       cropsize=crop_size)
+        test_dss.append(test_ds)
+        print(f"Test ds {i} size: {len(test_ds)}")
+        test_dl = torch.utils.data.DataLoader(test_ds,
+                                              batch_size=batch_size,
+                                              shuffle=False,
+                                              num_workers=0,
+                                              pin_memory=False)
+        test_dls.append(test_dl)
+ 
+
     print("Instantiating models...")
+    student_nets = []
     teacher_net = modified_resnet18(pretrained=True, out_features=out_features).to(device)
-    student_net1 = modified_resnet18(pretrained=False, out_features=out_features).to(device)
-    student_net2 = modified_resnet18(pretrained=False, out_features=out_features).to(device)
 
-    if os.path.isfile(checkpoint1):
-        student_net1.load_state_dict(torch.load(checkpoint1))
-    else:
-        print(f"No checkpoint file ound at {checkpoint1}")
-    if os.path.isfile(checkpoint2):
-        student_net2.load_state_dict(torch.load(checkpoint2))
-    else:
-        print(f"No checkpoint file ound at {checkpoint2}")
+    for i, checkpoint_path in enumerate(checkpoint_paths):
+        if not os.path.isfile(checkpoint_path):
+            raise ValueError(f"Checkpoint file {checkpoint_path} not found")
+        # instantiate models
+        student_net = modified_resnet18(pretrained=False, out_features=out_features).to(device)
+        student_net.load_state_dict(torch.load(checkpoint_path))
+        print(f"Loaded checkpoint {checkpoint_path} for student model {i}")
+        student_nets.append(student_net)
+
+
 
     for param in teacher_net.parameters():
         param.requires_grad = False
@@ -102,38 +99,29 @@ def test_multi_model():
 
     # test
     print("Testing models...")
-    results1 = test_student_model(teacher_net,
-                                 student_net1,
-                                 test_dl1,
-                                 device)
-    results2 = test_student_model(teacher_net,
-                                 student_net2,
-                                 test_dl2,
-                                 device)
+    for i, (test_dl, student_net) in enumerate(zip(test_dls, student_nets)):
+        results = test_student_model(teacher_net,
+                                     student_net,
+                                     test_dl,
+                                     device)
     
-    # save results to file
-    print("Saving results to file...")
-    # save avg anomaly and peak anomaly histograms to file
-    utils.plot_multi_hist(results1, save_to=os.path.join(save_path, "anomaly_histograms1.png"))
-    utils.plot_multi_hist(results2, save_to=os.path.join(save_path, "anomaly_histograms2.png"))
-    utils.plot_multi_curves(results1, save_to=os.path.join(save_path, "curves1.png"))
-    utils.plot_multi_curves(results2, save_to=os.path.join(save_path, "curves2.png"))
-    # save examples of heatmaps
-    utils.plot_results_examples(results1, N=20, save_to=os.path.join(save_path, "results1_examples.png"))
-    utils.plot_results_examples(results2, N=20, save_to=os.path.join(save_path, "results2_examples.png"))
-    utils.plot_best_results_examples(results1, N=25, save_to=os.path.join(save_path, "results1_examples_best.png"))
-    utils.plot_best_results_examples(results2, N=25, save_to=os.path.join(save_path, "results2_examples_best.png"))
-    utils.plot_worst_results_examples(results1, N=25, save_to=os.path.join(save_path, "results1_examples_worst.png"))
-    utils.plot_worst_results_examples(results2, N=25, save_to=os.path.join(save_path, "results2_examples_worst.png"))
+        # save results to file
+        print("Saving results to file...")
 
+        # save avg anomaly and peak anomaly histograms to file
+        #utils.plot_multi_hist(results, save_to=os.path.join(save_path, f"anomaly_histograms_{i}.png"))
+        #utils.plot_multi_curves(results, save_to=os.path.join(save_path, f"curves_{i}.png"))
 
-    # save anomaly maps to file
-    np.save(os.path.join(save_path, "anomaly_maps1.npy"), results1["anomaly_maps"])
-    np.save(os.path.join(save_path, "anomaly_maps2.npy"), results2["anomaly_maps"])
-    np.save(os.path.join(save_path, "inputs1.npy"), results1["inputs"])
-    np.save(os.path.join(save_path, "inputs2.npy"), results2["inputs"])
-    np.save(os.path.join(save_path, "labels1.npy"), results1["labels"])
-    np.save(os.path.join(save_path, "labels2.npy"), results2["labels"])
+        # save examples of heatmaps
+        #utils.plot_results_examples(results, N=20, save_to=os.path.join(save_path, f"results_example_{i}.png"))
+        #utils.plot_best_results_examples(results, N=25, save_to=os.path.join(save_path, f"results_examples_best_{i}.png"))
+        #utils.plot_worst_results_examples(results, N=25, save_to=os.path.join(save_path, f"results_examples_worst_{i}.png"))
+
+        # save anomaly maps to file
+        np.save(os.path.join(save_path, f"anomaly_maps_{i}.npy"), results["anomaly_maps"])
+        if i==0:
+            np.save(os.path.join(save_path, f"inputs_{i}.npy"), results["inputs"])
+            np.save(os.path.join(save_path, f"labels_{i}.npy"), results["labels"])
 
 
 def combine_results():
@@ -141,53 +129,86 @@ def combine_results():
     params = setupArgs()["TEST_MULTI"]
     save_path = params["SAVE_PATH"]
 
-    # Load data
-    anomaly_maps1 = np.load(os.path.join(save_path, "anomaly_maps1.npy"))
-    anomaly_maps2 = np.load(os.path.join(save_path, "anomaly_maps2.npy"))
-    labels1 = np.load(os.path.join(save_path, "labels1.npy"))
-    labels2 = np.load(os.path.join(save_path, "labels2.npy"))
-    inputs1 = np.load(os.path.join(save_path, "inputs1.npy"))
-    inputs2 = np.load(os.path.join(save_path, "inputs2.npy"))
+    checkpoint_paths = [p.strip() for p in params["CHECKPOINT_PATHS"].split(",")]
+    N = len(checkpoint_paths)
 
-    assert (labels1==labels2).all()
+    # Load data
+    anomaly_maps = []
+    
+    for i in range(N):
+        anomaly_maps.append(np.load(os.path.join(save_path, f"anomaly_maps_{i}.npy")))
+        if i==0:
+            inputs = np.load(os.path.join(save_path, f"inputs_{i}.npy"))
+            labels = np.load(os.path.join(save_path, f"labels_{i}.npy"))
+    anomaly_maps = np.array(anomaly_maps)
+
+    print(f"Loaded anomaly maps shape: {anomaly_maps.shape}")
+
 
     # Plot anomaly maps
-    sum = anomaly_maps1 + anomaly_maps2
-    sumsq = np.sqrt(anomaly_maps1**2 + anomaly_maps2**2)
+    mean_maps = np.mean(anomaly_maps, axis=0)
+    std_maps = np.std(anomaly_maps, axis=0)
 
+    suppression_factor = 20
+    agreement_mean_maps = mean_maps.copy()/(1 + suppression_factor*std_maps)
 
-    fig, ax = plt.subplots(nrows=5, ncols=8, figsize=(16, 8), tight_layout=True)
-    for i in range(8):
-        ax[0,i].imshow(inputs1[i][0]); ax[0,i].axis("off"); ax[0,i].set_title(f"input {i}")
-        ax[1,i].imshow(anomaly_maps1[i], cmap="jet"); ax[1,i].axis("off"); ax[1,i].set_title(f"anomaly1 {i}")
-        ax[2,i].imshow(anomaly_maps2[i], cmap="jet"); ax[2,i].axis("off"); ax[2,i].set_title(f"anomaly2 {i}")
-        ax[3,i].imshow(sum[i], cmap="jet"); ax[3,i].axis("off"); ax[3,i].set_title(f"sum {i}")
-        ax[4,i].imshow(sumsq[i], cmap="jet"); ax[4,i].axis("off"); ax[4,i].set_title(f"sumsq {i}")
+    fig, ax = plt.subplots(nrows=N+3, ncols=12, figsize=(20, 2*(N+3)), tight_layout=True)
+    for i in range(12):
+        ax[0,i].imshow(inputs[i][0])
+        ax[0,i].axis("off")
+        ax[0,i].set_title(f"input {i}")
+        for j in range(N):
+            ax[j+1,i].imshow(anomaly_maps[j][i], cmap="jet")
+            ax[j+1,i].axis("off")
+            ax[j+1,i].set_title(f"anom. map {j}-{i}")
+        ax[-2,i].imshow(mean_maps[i], cmap="jet")
+        ax[-2,i].axis("off")
+        ax[-2,i].set_title(f"mean map {i}")
+        ax[-1,i].imshow(agreement_mean_maps[i], cmap="jet")
+        ax[-1,i].axis("off")
+        ax[-1,i].set_title(f"agreem. map {i}")
 
     plt.savefig(os.path.join(save_path, "anomaly_maps_combined.png"))
 
     # Plot Histograms
-    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(16, 4), tight_layout=True)
-    utils.plot_hist_on_ax(ax[0], np.max(anomaly_maps1, axis=(1,2)), labels1, "Peak 1", bins=20, alpha=0.5)
-    utils.plot_hist_on_ax(ax[1], np.max(anomaly_maps2, axis=(1,2)), labels1, "Peak 2", bins=20, alpha=0.5)
-    utils.plot_hist_on_ax(ax[2], np.max(sum, axis=(1,2)), labels1, "Sum", bins=20, alpha=0.5)
-    utils.plot_hist_on_ax(ax[3], np.max(sumsq, axis=(1,2)), labels1, "sumsq", bins=20, alpha=0.5)
+    fig, ax = plt.subplots(nrows=N+2, ncols=1, figsize=(6, 3*(N+2)), tight_layout=True)
+    for j in range(N):
+        utils.plot_hist_on_ax(ax[j], np.max(anomaly_maps[j], axis=(1,2)), labels,
+                              f"Peak {j}", vlines = True, bins=25, alpha=0.5)
+        ax[j].set_xlim((0, 0.42))
+    utils.plot_hist_on_ax(ax[-2], np.max(mean_maps, axis=(1,2)), labels, 
+                          "mean maps", vlines = True, bins=25, alpha=0.5)
+    ax[-2].set_xlim((0, 0.42))
+    utils.plot_hist_on_ax(ax[-1], np.max(agreement_mean_maps, axis=(1,2)), labels,
+                          "agreem. maps", vlines = True, bins=25, alpha=0.5)
+    ax[-1].set_xlim((0, 0.42))
 
     plt.savefig(os.path.join(save_path, "histograms_combined.png"))
 
 
     # Plot ROC curves
-    fig, ax = plt.subplots(nrows=2, ncols=4, figsize=(16, 4), tight_layout=True)
-    utils.plot_roc_curve(ax[0,0], np.max(anomaly_maps1, axis=(1,2)), labels1, "ROC Peak 1")
-    utils.plot_roc_curve(ax[1,0], np.max(anomaly_maps1, axis=(1,2)), labels1, "ROClog Peak 1", log=True)
-    utils.plot_roc_curve(ax[0,1], np.max(anomaly_maps2, axis=(1,2)), labels1, "ROC Peak 2")
-    utils.plot_roc_curve(ax[1,1], np.max(anomaly_maps2, axis=(1,2)), labels1, "ROClog Peak 2", log=True)
-    utils.plot_roc_curve(ax[0,2], np.max(sum, axis=(1,2)), labels1, "ROC Sum")
-    utils.plot_roc_curve(ax[1,2], np.max(sum, axis=(1,2)), labels1, "ROClog Sum", log=True)
-    utils.plot_roc_curve(ax[0,3], np.max(sumsq, axis=(1,2)), labels1, "ROC sumsq")
-    utils.plot_roc_curve(ax[1,3], np.max(sumsq, axis=(1,2)), labels1, "ROClog sumsq", log=True)
+    fig, ax = plt.subplots(nrows=2, ncols=N+2, figsize=(3*(N+2), 6), tight_layout=True)
+    for j in range(N):
+        utils.plot_roc_curve(ax[0, j], np.max(anomaly_maps[j], axis=(1,2)), labels, f"ROC Peak {j}")
+        utils.plot_roc_curve(ax[1, j], np.max(anomaly_maps[j], axis=(1,2)), labels, f"ROClog Peak {j}", log=True)
+    utils.plot_roc_curve(ax[0, -2], np.max(mean_maps, axis=(1,2)), labels, "ROC mean maps")
+    utils.plot_roc_curve(ax[1, -2], np.max(mean_maps, axis=(1,2)), labels, "ROClog mean maps", log=True)
+    utils.plot_roc_curve(ax[0, -1], np.max(agreement_mean_maps, axis=(1,2)), labels, "ROC agreem. maps")
+    utils.plot_roc_curve(ax[1, -1], np.max(agreement_mean_maps, axis=(1,2)), labels, "ROClog agreem. maps", log=True)
 
     plt.savefig(os.path.join(save_path, "curves_combined.png"))
+
+    # Plot ROC (area) curves
+    fig, ax = plt.subplots(nrows=2, ncols=N+2, figsize=(3*(N+2), 6), tight_layout=True)
+    for j in range(N):
+        utils.plot_roc_curve_area(ax[0, j], np.max(anomaly_maps[j], axis=(1,2)), labels, f"ROC(area) Peak {j}")
+        utils.plot_roc_curve_area(ax[1, j], np.max(anomaly_maps[j], axis=(1,2)), labels, f"ROC(area)log Peak {j}", log=True)
+    utils.plot_roc_curve_area(ax[0, -2], np.max(mean_maps, axis=(1,2)), labels, "ROC(area) mean maps")
+    utils.plot_roc_curve_area(ax[1, -2], np.max(mean_maps, axis=(1,2)), labels, "ROC(area)log mean maps", log=True)
+    utils.plot_roc_curve_area(ax[0, -1], np.max(agreement_mean_maps, axis=(1,2)), labels, "ROC(area) agreem. maps")
+    utils.plot_roc_curve_area(ax[1, -1], np.max(agreement_mean_maps, axis=(1,2)), labels, "ROC(area)log agreem. maps", log=True)
+
+    plt.savefig(os.path.join(save_path, "curves_combined(area).png"))
 
 
 if __name__ == "__main__":
