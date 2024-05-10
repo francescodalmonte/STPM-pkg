@@ -41,13 +41,21 @@ def plot_training_loss(train_dict, save_to=None):
         fig.savefig(save_to)
 
 
-def plot_hist_on_ax(ax, data, labels, title, **kwargs):
+def plot_hist_on_ax(ax, data, labels, title, vlines = False, **kwargs):
     limits = [np.min(data), np.max(data)]
     ax.hist(data[labels==0], color="tab:blue",
             range=limits, density=True, **kwargs)
     ax.hist(data[labels==1], color="tab:orange",
             range=limits, density=True, **kwargs)
     ax.set_title(title)
+    if vlines:
+        m0 = np.mean(data[labels==0])
+        m1 = np.mean(data[labels==1])
+        ax.axvline(m0, c="tab:blue", linestyle='dashed')
+        ax.axvline(m1, c="tab:orange", linestyle='dashed')
+        ax.text((m1-m0)-0.08, 20, f"dist. = {(m1-m0):.4f}", fontsize=11)
+        ax.text((m1-m0)-0.08, 17, f"rate = {(m1/m0):.2f}", fontsize=11)
+        
 
 def plot_multi_hist(results, save_to=None):
     fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(8,3.5), tight_layout=True)
@@ -60,6 +68,7 @@ def plot_multi_hist(results, save_to=None):
 def plot_roc_curve(ax, data, labels, title, log=False, **kwargs):
     # Compute ROC curve
     fpr, tpr, thresholds = roc_curve(labels, data)
+
     # Compute AUC
     roc_auc = auc(fpr, tpr)
 
@@ -73,7 +82,24 @@ def plot_roc_curve(ax, data, labels, title, log=False, **kwargs):
             horizontalalignment='right', verticalalignment='bottom',
             transform=ax.transAxes, fontsize=10)
     
+def plot_roc_curve_area(ax, data, labels, title, log=False, cropsize=224, pixelsize=2e-4, **kwargs):
+    # Compute ROC curve
+    fpr, tpr, thresholds = roc_curve(labels, data)
+    ncrops_square_meter = 1/(cropsize*pixelsize)**2
+    fpr_square_meter = fpr * ncrops_square_meter
 
+    # Compute AUC
+    roc_auc = auc(fpr, tpr)
+
+    ax.plot(fpr_square_meter, tpr, **kwargs)
+    ax.set_xlabel("#FP/m^2")
+    ax.set_ylabel("TP rate")
+    if log:
+        ax.set_xscale("log")
+    ax.set_title(title)
+    ax.text(s = f"AUROC = {roc_auc:.5f}", x=0.95, y=0.03,
+            horizontalalignment='right', verticalalignment='bottom',
+            transform=ax.transAxes, fontsize=10)
 
 def plot_pr_curve(ax, data, labels, title, **kwargs):
     # Compute ROC curve
