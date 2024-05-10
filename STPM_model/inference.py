@@ -14,22 +14,26 @@ def tile_input_image(name: str,
                      overlap: int = 0,
                      scale: float = 1.,
                      mode: str = "diff",
-                     minuend: int = 2,
-                     subtrahend: int = 1
+                     term1: int = 2,
+                     term2: int = 1,
+                     contrast_correction: bool = False,
+                     contrast_correction_sigma: float = 50
                      ):
     
     print("Tiling image")
     object = multiChannelImage(name, root_path)
     # images
-    if mode == "diff":
-        image = object.__get_diffImage__(scale = scale, minuend = minuend, subtrahend = subtrahend)
-    elif mode in ["0", "1", "2", "3", "4"]:
-        image = object.__get_images__(scale = scale)[int(mode)]
-    else:
-        raise(ValueError("Invalid argument: mode"))
+    image = object.image_mode_selector(mode=mode,
+                                       scale=scale,
+                                       term1=term1,
+                                       term2=term2,
+                                       contrast_correction=contrast_correction,
+                                       contrast_correction_sigma=contrast_correction_sigma
+                                       )  
 
-    tiles, coords = tileImage(image, size, overlap, gauss_blur = .0)
-    tiles = np.stack((tiles, tiles, tiles)).transpose(1,2,3,0)
+    tiles, coords = tileImage(image, size, overlap, normalize = False, gauss_blur = 0.)
+    #tiles = np.stack((tiles, tiles, tiles)).transpose(1,2,3,0)
+    print(tiles.shape)
 
     return tiles/255, coords, image
 
@@ -37,11 +41,13 @@ def tile_input_image(name: str,
 
 
 def save_anomaly_hist(anomaly_scores_set: np.ndarray,
-                      save_path: str
+                      save_path: str,
+                      log: bool = True
                       ):
     d = np.clip(anomaly_scores_set, 0, 1)
     plt.hist(anomaly_scores_set, bins = 50, range = (-0.01, 1.01))
-    plt.yscale("log")
+    if log:
+        plt.yscale("log")
     plt.title("Anomaly scores (clipped [0.0:1.0])")
     plt.savefig(save_path)
 
@@ -67,8 +73,8 @@ def save_anomaly_heatmap(coords_set: np.ndarray,
     h = anomaly_scores_set.reshape(len(np.unique(coords_set[:,1])), len(np.unique(coords_set[:,0])))
         
     fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8,12), dpi=600)
-    ax[0].imshow(h, vmin = 0., vmax = 0.5); ax[0].set_title("Anomaly scores")
-    ax[1].imshow(np.sqrt(h), vmin = 0., vmax = 0.5); ax[1].set_title("Anomaly scores (sqrt)")
+    ax[0].imshow(h, vmin = 0., vmax = 1.); ax[0].set_title("Anomaly scores")
+    ax[1].imshow(h**2, vmin = 0., vmax = 1.); ax[1].set_title("Anomaly scores (pow2)")
     
     plt.savefig(save_path)
 
@@ -83,7 +89,8 @@ def save_annotated_image(image: np.ndarray,
                          threshold: float = 0.1
                          ):
     # image
-    CVimage = np.array(np.stack((image, image, image)).transpose(1,2,0)).copy()
+    print(image.shape)
+    CVimage = np.array(image).copy()#.transpose(1,2,0)
 
     # threshold mask
     m = anomaly_scores_set > threshold
@@ -140,7 +147,8 @@ def compose_anomalyImage(anomaly_maps: np.ndarray,
                          coords: np.ndarray,
                          save_path: str,
                          image_shape: list,
-                         crop_size: int):
+                         crop_size: int,
+                         false_color: bool = True):
     """
     Aseemble a set of crop-sized anomaly maps from FCDD results
     to create a full scale anomaly heatmap.
@@ -156,9 +164,11 @@ def compose_anomalyImage(anomaly_maps: np.ndarray,
         count[left:right, top:bottom]+=1
 
     anomaly_image = (np.divide(anomaly_image, count, where=count!=0))
-    anomaly_image = (256*anomaly_image).astype(np.uint8)
-    anomaly_image = gaussian_filter(anomaly_image, sigma=4)
+    anomaly_image = (255*(anomaly_image**2)).astype(np.uint8)
+    anomaly_image = gaussian_filter(anomaly_image, sigma=1)
     # save image to file
+    if false_color:
+        anomaly_image = cv.applyColorMap(anomaly_image, cv.COLORMAP_JET)
     cv.imwrite(save_path, anomaly_image)
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import time
-import configparser
+import configparser, argparse
 from scipy.ndimage import gaussian_filter
 from matplotlib import pyplot as plt
 
@@ -17,13 +17,22 @@ from STPM_model import inference
 
 
 def setupArgs():
+    parser = argparse.ArgumentParser()
     config = configparser.ConfigParser()
-    config_path = os.path.join(os.path.dirname(__file__), "config.INI")
+
+    parser.add_argument("--config",
+                        type=str,
+                        help="Absolute filepath of config (.INI) file (default: ./config.INI)",
+                        default=os.path.join(os.path.dirname(__file__), "config.INI")
+                        )
+
+    config_path = parser.parse_args().config
+
     if os.path.isfile(config_path):
         config.read(config_path)
     else:
         raise ValueError(f"can't find configuration file {config_path}")
-    
+
     return config
 
 
@@ -41,8 +50,9 @@ if __name__ == "__main__":
     crop_size = int(params["CROP_SIZE"])
     overlap = int(params["OVERLAP"])
     mode = params["MODE"]
-    minuend = int(params["MINUEND"])
-    subtrahend = int(params["SUBTRAHEND"])
+    term1 = int(params["TERM1"])
+    term2 = int(params["TERM2"])
+    contrast_correction = bool(int(params["CONTRAST_CORRECTION"]))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
@@ -57,14 +67,15 @@ if __name__ == "__main__":
                                                       overlap = overlap,
                                                       scale = 1.,
                                                       mode = mode,
-                                                      minuend = minuend,
-                                                      subtrahend = subtrahend)
+                                                      term1 = term1,
+                                                      term2 = term2,
+                                                      contrast_correction = contrast_correction)
     
     conditionalMkDir(save_path)
     conditionalMkDir(os.path.join(save_path, "crops"))
 
     saveCrops(save_to = os.path.join(save_path, "crops"),
-              crops_set = (256*tiles[:,:,:,0]).astype(int),
+              crops_set = (255*tiles[:,:,:,0]).astype(int),
               centers_set = coords,
               prefix = input_name,
               suffix = "")
@@ -95,20 +106,20 @@ if __name__ == "__main__":
             features_s = student_net(x.to(device))
 
             a_map = compute_anomaly_maps(features_s, features_t, out_size=crop_size)
-            a_map = gaussian_filter(a_map, sigma=3)
-            a_map = ((15*a_map)**3)/15
+            a_map = gaussian_filter(a_map, sigma=1)
+            a_map = np.clip((a_map*4), 0., 1.)
 
             anomaly_maps.append(a_map)
 
     anomaly_maps = np.array(anomaly_maps)
-    anomaly_peaks =  np.max(anomaly_maps, axis=(1,2))
+    anomaly_peaks = np.max(anomaly_maps, axis=(1,2))
 
     print(f"Elapsed time: {(time.time()-start):2f} s")
 
     # SAVE RESULTS
 
     saveCrops(save_to = os.path.join(save_path, "crops"),
-              crops_set = (256*anomaly_maps).astype(np.uint8),
+              crops_set = (255*anomaly_maps).astype(np.uint8),
               centers_set = coords,
               prefix = input_name,
               suffix = "_AMAP",
@@ -132,6 +143,8 @@ if __name__ == "__main__":
     np.save(os.path.join(save_path, "anomaly_scores_set.npy"), sorted_anomaly_peaks)
 
     inference.save_anomaly_hist(anomaly_peaks,
+                                os.path.join(save_path, "anomaly_hist_log.png"))
+    inference.save_anomaly_hist(anomaly_peaks,
                                 os.path.join(save_path, "anomaly_hist.png"))
         
     inference.save_anomaly_hist_pixelwise(anomaly_maps.reshape(-1)[:],
@@ -150,8 +163,15 @@ if __name__ == "__main__":
 
     inference.compose_anomalyImage(sorted_anomaly_maps,
                                    sorted_coords,
+                                   save_path=os.path.join(save_path, "anomaly_heatmap_tot_C.png"),
+                                   image_shape=[7750,2048],
+                                   crop_size=crop_size,
+                                   false_color=True)
+    inference.compose_anomalyImage(sorted_anomaly_maps,
+                                   sorted_coords,
                                    save_path=os.path.join(save_path, "anomaly_heatmap_tot.png"),
                                    image_shape=[7750,2048],
-                                   crop_size=crop_size)
+                                   crop_size=crop_size,
+                                   false_color=False)
 
 
