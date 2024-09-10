@@ -52,10 +52,13 @@ if __name__ == "__main__":
     mode = params["MODE"]
     term1 = int(params["TERM1"])
     term2 = int(params["TERM2"])
+    eval_mode = bool(int(params["EVAL_MODE"]))
+    save_eval_crops = bool(int(params["SAVE_EVAL_CROPS"]))
     contrast_correction = bool(int(params["CONTRAST_CORRECTION"]))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
+
 
 
 
@@ -69,16 +72,29 @@ if __name__ == "__main__":
                                                       mode = mode,
                                                       term1 = term1,
                                                       term2 = term2,
+                                                      wmask = eval_mode,
                                                       contrast_correction = contrast_correction)
     
+
+    if eval_mode:
+        tiles_masks = tiles[:,:,:,3]
+        tiles = tiles[:,:,:,:3]
+
     conditionalMkDir(save_path)
     conditionalMkDir(os.path.join(save_path, "crops"))
+    conditionalMkDir(os.path.join(save_path, "crops_masks"))
 
     saveCrops(save_to = os.path.join(save_path, "crops"),
               crops_set = (255*tiles[:,:,:,0]).astype(int),
               centers_set = coords,
               prefix = input_name,
               suffix = "")
+    if eval_mode:
+        saveCrops(save_to = os.path.join(save_path, "crops_masks"),
+                  crops_set = (255*tiles_masks).astype(int),
+                  centers_set = coords,
+                  prefix = input_name,
+                suffix = "_M")
 
 
 
@@ -106,8 +122,8 @@ if __name__ == "__main__":
             features_s = student_net(x.to(device))
 
             a_map = compute_anomaly_maps(features_s, features_t, out_size=crop_size)
-            a_map = gaussian_filter(a_map, sigma=1)
-            a_map = np.clip((a_map*4), 0., 1.)
+            a_map = gaussian_filter(a_map, sigma=0.5)
+            a_map = np.clip((a_map*2), 0., 1.)
 
             anomaly_maps.append(a_map)
 
@@ -115,6 +131,29 @@ if __name__ == "__main__":
     anomaly_peaks = np.max(anomaly_maps, axis=(1,2))
 
     print(f"Elapsed time: {(time.time()-start):2f} s")
+
+
+    # run evaluation if needed
+    if eval_mode:
+        print("Evaluating model performance...")
+        threshold_set = [qt for qt in np.linspace(0.15, .50, 50)]
+
+        for qt in threshold_set:
+            conditionalMkDir(os.path.join(save_path, f"eval_{qt:.5f}"))
+            TP, TN, FP, FN, TPclasses, FNclasses = inference.evaluate_detection(anomaly_maps,
+                                     tiles_masks,
+                                     tiles,
+                                     threshold = qt,
+                                     save_eval_crops = save_eval_crops,
+                                     save_path = os.path.join(save_path, f"eval_{qt:.5f}")
+                                     )
+            s = f"Threshold: {qt:.5f}\tTP: {TP} ({TPclasses})\tTN: {TN}\tFP: {FP}\tFN: {FN} ({FNclasses})"
+            print(s)
+            with open(os.path.join(save_path, "results.dat"), "a") as file:
+                file.write(s)
+                file.write("\n")
+            if FP == 0:
+                break
 
     # SAVE RESULTS
 
@@ -137,10 +176,10 @@ if __name__ == "__main__":
     sorted_coords = sorted_coords[sorted_coords[:,1].argsort(kind='mergesort')]
 
     # save to file
-    np.save(os.path.join(save_path, "inputs_set.npy"), sorted_input_images)
-    np.save(os.path.join(save_path, "coords_set.npy"), sorted_coords)
-    np.save(os.path.join(save_path, "anomaly_maps_set.npy"), sorted_anomaly_maps)
-    np.save(os.path.join(save_path, "anomaly_scores_set.npy"), sorted_anomaly_peaks)
+    #np.save(os.path.join(save_path, "inputs_set.npy"), sorted_input_images)
+    #np.save(os.path.join(save_path, "coords_set.npy"), sorted_coords)
+    #np.save(os.path.join(save_path, "anomaly_maps_set.npy"), sorted_anomaly_maps)
+    #np.save(os.path.join(save_path, "anomaly_scores_set.npy"), sorted_anomaly_peaks)
 
     inference.save_anomaly_hist(anomaly_peaks,
                                 os.path.join(save_path, "anomaly_hist_log.png"))
@@ -154,12 +193,12 @@ if __name__ == "__main__":
                                    sorted_anomaly_peaks,
                                    os.path.join(save_path, "anomaly_heatmap.png"))
         
-    inference.save_annotated_image(image,
+    inference.save_annotated_image(image[:,:,:3],
                                    crop_size,
                                    sorted_coords,
                                    sorted_anomaly_peaks,
                                    os.path.join(save_path, "annotated_image.png"),
-                                   threshold = 0.2)
+                                   threshold = 0.35)
 
     inference.compose_anomalyImage(sorted_anomaly_maps,
                                    sorted_coords,

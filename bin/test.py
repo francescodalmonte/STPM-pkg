@@ -85,6 +85,7 @@ def test_model():
     _ = teacher_net.eval() # teacher model will always remain in eval mode
 
     # test
+    print("Testing...")
     results = test_student_model(teacher_net,
                                  student_net,
                                  test_dl,
@@ -92,11 +93,13 @@ def test_model():
     # save avg anomaly and peak anomaly histograms to file
     utils.plot_multi_hist(results, save_to=os.path.join(save_path, "anomaly_histograms.png"))
     utils.plot_multi_curves(results, save_to=os.path.join(save_path, "curves.png"))
+    utils.plot_multi_curves_area(results, save_to=os.path.join(save_path, "curves.png"))
+
+
     # save examples of heatmaps
     utils.plot_results_examples(results, N=20, save_to=os.path.join(save_path, "results_examples.png"))
     utils.plot_best_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_best.png"))
     utils.plot_worst_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_worst.png"))
-
 
 
 if __name__ == "__main__":

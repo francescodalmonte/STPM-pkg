@@ -73,7 +73,7 @@ def train_model():
     # (in an AD task usually there is no risk of overtraining. However, a validation set
     # can used to assess the model capability to generalize its behaviour to new normal samples)
     img_nums = len(train_ds_tot)
-    valid_num = int(img_nums * 0.25)
+    valid_num = int(img_nums * 0.15)
     train_num = img_nums - valid_num
     train_ds, val_ds = torch.utils.data.random_split(train_ds_tot, [train_num, valid_num])
 
@@ -142,7 +142,7 @@ def train_model():
                             optimizer,
                             name_train,
                             save_path,
-                            log_interval=2,
+                            log_interval=10,
                             lr_scheduler=lr_scheduler,
                             verbose=True)
     utils.plot_training_loss(train_dict, save_to=os.path.join(save_path, "training_loss.png"))
@@ -158,9 +158,9 @@ def train_model():
     utils.plot_multi_hist(results, save_to=os.path.join(save_path, "anomaly_histograms.png"))
     utils.plot_multi_curves(results, save_to=os.path.join(save_path, "curves.png"))
     # save examples of heatmaps
-    utils.plot_results_examples(results, N=20, save_to=os.path.join(save_path, "results_examples.png"))
-    utils.plot_best_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_best.png"))
-    utils.plot_worst_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_worst.png"))
+    utils.plot_results_examples(results, N=12, save_to=os.path.join(save_path, "results_examples.png"))
+    utils.plot_best_results_examples(results, N=20, save_to=os.path.join(save_path, "results_examples_best.png"))
+    utils.plot_worst_results_examples(results, N=20, save_to=os.path.join(save_path, "results_examples_worst.png"))
 
 
 if __name__ == "__main__":

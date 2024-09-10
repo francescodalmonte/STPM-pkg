@@ -6,6 +6,7 @@ from scipy.ndimage import gaussian_filter, median_filter
 
 from preprocessing_tele.multiChannelImage import multiChannelImage
 from preprocessing_tele.image_processing import tileImage
+from preprocessing_tele.dataset import conditionalMkDir
 
 
 def tile_input_image(name: str,
@@ -16,6 +17,7 @@ def tile_input_image(name: str,
                      mode: str = "diff",
                      term1: int = 2,
                      term2: int = 1,
+                     wmask: bool = False,
                      contrast_correction: bool = False,
                      contrast_correction_sigma: float = 50
                      ):
@@ -30,9 +32,13 @@ def tile_input_image(name: str,
                                        contrast_correction=contrast_correction,
                                        contrast_correction_sigma=contrast_correction_sigma
                                        )  
+    if wmask:
+        mask = object.__get_anomalousMask__(scale=scale)
+        print(f"Mask shape: {mask.shape}")
+        image = np.concatenate((image, np.expand_dims(mask, axis=2)), axis = 2)
+        #image = image[10:, :1490] #for comparison w specialvideo results
 
-    tiles, coords = tileImage(image, size, overlap, normalize = False, gauss_blur = 0.)
-    #tiles = np.stack((tiles, tiles, tiles)).transpose(1,2,3,0)
+    tiles, coords = tileImage(image, size, overlap, normalize = False, gauss_blur = 0., saturate_mask = False)
     print(tiles.shape)
 
     return tiles/255, coords, image
@@ -185,3 +191,60 @@ def jaccard_similarity(array1, array2):
     intersection = array1*array2
     union = array1+array2-intersection
     return np.sum(intersection)/np.sum(union)
+
+
+
+def defects_class(array):
+    m = np.max(array)
+    if m<80: return "1"
+    elif m<200: return "2"
+    else: return "3"
+
+
+def evaluate_detection(anomaly_maps: np.ndarray,
+                       tiles_masks: np.ndarray,
+                       tiles: np.ndarray,
+                       threshold: float,
+                       save_eval_crops: bool,
+                       save_path: str
+                       ):
+    
+    TP, TN, FP, FN = 0, 0, 0, 0
+    TP_defects_classes = {"1": 0, "2": 0, "3": 0}
+    FN_defects_classes = {"1": 0, "2": 0, "3": 0}
+
+    conditionalMkDir(os.path.join(save_path, "TPs"))
+    conditionalMkDir(os.path.join(save_path, "FPs"))
+    conditionalMkDir(os.path.join(save_path, "FNs"))
+    for i, (amap, mask, tile) in enumerate(zip(anomaly_maps, tiles_masks, tiles)):
+        amap_th = amap > threshold
+        mask_l = mask > 0
+        if np.any(mask_l):
+            if np.any(np.logical_and(amap_th, mask_l)):
+                path = os.path.join(save_path, "TPs")
+                if save_eval_crops:
+                    cv.imwrite(os.path.join(path, f"crop_{i}.png"), (tile*255).astype(np.uint8))
+                    cv.imwrite(os.path.join(path, f"crop_{i}_Ma.png"), amap_th.astype(np.uint8)*255)
+                    cv.imwrite(os.path.join(path, f"crop_{i}_M.png"), (mask*255).astype(np.uint8))
+                TP_defects_classes[defects_class(mask*255)]+=1
+                TP+=1
+            else:
+                path = os.path.join(save_path, "FNs")
+                if save_eval_crops:
+                    cv.imwrite(os.path.join(path, f"crop_{i}.png"), (tile*255).astype(np.uint8))
+                    cv.imwrite(os.path.join(path, f"crop_{i}_Ma.png"), amap_th.astype(np.uint8)*255)
+                    cv.imwrite(os.path.join(path, f"crop_{i}_M.png"), (mask*255).astype(np.uint8))
+                FN_defects_classes[defects_class(mask*255)]+=1
+                FN+=1
+        else:
+            if np.any(amap_th):
+                path = os.path.join(save_path, "FPs")
+                if save_eval_crops:
+                    cv.imwrite(os.path.join(path, f"crop_{i}.png"), (tile*255).astype(np.uint8))
+                    cv.imwrite(os.path.join(path, f"crop_{i}_Ma.png"), amap_th.astype(np.uint8)*255)
+                    cv.imwrite(os.path.join(path, f"crop_{i}_M.png"), (mask*255).astype(np.uint8))
+                FP+=1
+            else:
+                TN+=1
+    
+    return TP, TN, FP, FN, TP_defects_classes, FN_defects_classes

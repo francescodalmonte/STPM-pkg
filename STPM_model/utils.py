@@ -127,6 +127,17 @@ def plot_multi_curves(results, save_to=None):
     if save_to is not None:
         fig.savefig(save_to)
 
+def plot_multi_curves_area(results, save_to=None):
+    fig, ax = plt.subplots(ncols=3, nrows=2, figsize=(12,7), tight_layout=True)
+    plot_roc_curve_area(ax[0,0], results["avg_anomaly"], results["labels"], "anomaly map AVG value")
+    plot_roc_curve_area(ax[0,1], results["anomaly_peak"], results["labels"], "anomaly map PEAK value")
+    plot_roc_curve_area(ax[0,2], results["anomaly_peak"], results["labels"], "anomaly map PEAK value (logx)", log=True)
+    plot_pr_curve(ax[1,0], results["avg_anomaly"], results["labels"], "anomaly map AVG value")
+    plot_pr_curve(ax[1,1], results["anomaly_peak"], results["labels"], "anomaly map PEAK value")
+    if save_to is not None:
+        fig.savefig(save_to)
+        
+
 
 
 def plot_results_examples(results, N=10, save_to=None):
