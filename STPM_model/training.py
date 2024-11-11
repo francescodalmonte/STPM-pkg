@@ -42,7 +42,7 @@ def total_loss(t_features, s_features, batch_avg=True):
 
         else:
             loss = loss.mean(dim=(1,2))
-            tot_loss.append(loss.cpu().detach().numpy())
+            tot_loss.append(loss.detach().cpu().numpy())
 
     if batch_avg:
         tot_loss/=N
@@ -70,7 +70,7 @@ def compute_anomaly_maps(t_features,
                                     align_corners=False
                                     )
 
-        anomaly_maps.append(anomaly_map.squeeze().cpu().detach().numpy())
+        anomaly_maps.append(anomaly_map.squeeze().detach().cpu().numpy())
 
     anomaly_maps = np.array(anomaly_maps).mean(axis=0)
 
@@ -92,25 +92,31 @@ def train_step(model_t,
     model_s.train() # only student model is trained
 
     for idx_batch, (x, y, mask) in enumerate(dataloader):
+        time0 = time.time()
         n_samples = len(y)
 
         # forward pass
         optimizer.zero_grad()
-        features_t = model_t(x.to(device))
-        features_s = model_s(x.to(device))
+        x = x.to(device)
+        features_t = model_t(x)
+        features_s = model_s(x)
         loss = total_loss(features_s, features_t)
 
         # backward pass
+        time1 = time.time()
         loss.backward()
         optimizer.step()
 
+        time2 = time.time()
+
         # log and store current values
         n_samples_super.append(n_samples)
-        loss_super.append(loss.cpu().detach().numpy()*n_samples)
+        loss_super.append(loss.detach().cpu().numpy()*n_samples)
 
         if log_interval>0:
             if idx_batch%log_interval==0:
-                print(f"TRAIN batch {idx_batch}/{len(dataloader)} - loss: {loss}")
+                time3 = time.time()
+                print(f"TRAIN batch {idx_batch}/{len(dataloader)} - loss: {loss} - time: {time3-time0:.4f} s (fwd: {time1-time0:.4f} s, bwd: {time2-time1:.4f} s, other: {time3-time2:.4f} s)")
 
     return {"avg_loss": np.sum(loss_super)/np.sum(n_samples_super)}
 
@@ -132,13 +138,14 @@ def val_step(model_t,
             n_samples = len(y)
 
             # forward pass
-            features_t = model_t(x.to(device))
-            features_s = model_s(x.to(device))
+            x = x.to(device)
+            features_t = model_t(x)
+            features_s = model_s(x)
             loss = total_loss(features_s, features_t)
 
             # log and store current values
             n_samples_super.append(n_samples)
-            loss_super.append(loss.cpu().detach().numpy()*n_samples)
+            loss_super.append(loss.detach().cpu().numpy()*n_samples)
 
     return {"avg_loss": np.sum(loss_super)/np.sum(n_samples_super)}
 
@@ -223,15 +230,16 @@ def test_student_model(model_t,
         for idx_batch, (x, y, mask) in enumerate(dataloader):
 
             # forward pass
-            features_t = model_t(x.to(device))
-            features_s = model_s(x.to(device))
+            x = x.to(device)
+            features_t = model_t(x)
+            features_s = model_s(x)
 
             a_map = compute_anomaly_maps(features_s, features_t)
             a_map = gaussian_filter(a_map, sigma=3, axes=(1,2))
 
-            inputs.extend(x.cpu().detach().numpy())
-            labels.extend(y.cpu().detach().numpy())
-            masks.extend(mask.squeeze().cpu().detach().numpy())
+            inputs.extend(x.detach().cpu().numpy())
+            labels.extend(y.detach().cpu().numpy())
+            masks.extend(mask.squeeze().detach().cpu().numpy())
             anomaly_maps.extend(a_map)
 
     return {"inputs": np.array(inputs),

@@ -38,7 +38,7 @@ def setupArgs():
 
 
 if __name__ == "__main__":
-
+    start = time.time()
 
     # setup input arguments
     params = setupArgs()["INFERENCE"]
@@ -63,7 +63,6 @@ if __name__ == "__main__":
 
 
     # TILE INPUT IMAGE, SAVE CROPS TO FILE
-    start = time.time()
     tiles, coords, image = inference.tile_input_image(name = input_name,
                                                       root_path = input_path,
                                                       size = crop_size,
@@ -117,9 +116,12 @@ if __name__ == "__main__":
         inputs = np.expand_dims(np.transpose(tiles, (0,3,1,2)), 1)
 
         for i, x in enumerate(torch.Tensor(inputs)):
+            if i % 100 == 0:
+                print(f"Processing crop {i}/{len(inputs)}")
             # forward pass
-            features_t = teacher_net(x.to(device))
-            features_s = student_net(x.to(device))
+            x = x.to(device)
+            features_t = teacher_net(x)
+            features_s = student_net(x)
 
             a_map = compute_anomaly_maps(features_s, features_t, out_size=crop_size)
             a_map = gaussian_filter(a_map, sigma=0.5)
@@ -203,13 +205,13 @@ if __name__ == "__main__":
     inference.compose_anomalyImage(sorted_anomaly_maps,
                                    sorted_coords,
                                    save_path=os.path.join(save_path, "anomaly_heatmap_tot_C.png"),
-                                   image_shape=[7750,2048],
+                                   image_shape=[12500,12500],
                                    crop_size=crop_size,
                                    false_color=True)
     inference.compose_anomalyImage(sorted_anomaly_maps,
                                    sorted_coords,
                                    save_path=os.path.join(save_path, "anomaly_heatmap_tot.png"),
-                                   image_shape=[7750,2048],
+                                   image_shape=[12500,12500],
                                    crop_size=crop_size,
                                    false_color=False)
 
