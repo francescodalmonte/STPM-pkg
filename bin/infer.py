@@ -5,6 +5,7 @@ import configparser, argparse
 from scipy.ndimage import gaussian_filter
 from matplotlib import pyplot as plt
 
+from torch.utils.data import DataLoader, TensorDataset
 import torch
 
 from preprocessing_tele.image_processing import saveCrops
@@ -36,10 +37,38 @@ def setupArgs():
     return config
 
 
+def run_inference(dataloader, teacher_net, student_net, device, verbose=True, gauss=0.5, m=2.):
+    """Run inference on the input data and compute anomaly maps.
+    """
+    start = time.time()
+    # inference
+    anomaly_maps = []
+    with torch.no_grad():
+        for i, (x,) in enumerate(dataloader):
+            if (i % (len(dataloader)//10)) == 0 and verbose:
+                print(f"Processing crop {i}/{len(dataloader)}")
+            # forward pass
+            x = x.to(device)
+            features_t = teacher_net(x)
+            features_s = student_net(x)
+
+            a_map = compute_anomaly_maps(features_s, features_t, out_size=crop_size)
+            a_map = gaussian_filter(a_map, sigma=gauss)
+            a_map = np.clip((a_map*m), 0., 1.)
+
+            anomaly_maps.append(a_map)
+
+    anomaly_maps = np.concatenate(anomaly_maps)
+    anomaly_peaks = np.max(anomaly_maps, axis=(1,2))
+
+    print(f"run_inference() elapsed time: {(time.time()-start):2f} s")
+    return anomaly_maps, anomaly_peaks
+
+
 
 if __name__ == "__main__":
-    start = time.time()
 
+    start = time.time()
     # setup input arguments
     params = setupArgs()["INFERENCE"]
 
@@ -47,6 +76,8 @@ if __name__ == "__main__":
     input_path = params["INPUT_PATH"]
     input_name = params["INPUT_NAME"]
     save_path = params["SAVE_PATH"]
+    batch_size = int(params["BATCH_SIZE"])
+    n_workers = int(params["N_WORKERS"])
     crop_size = int(params["CROP_SIZE"])
     overlap = int(params["OVERLAP"])
     mode = params["MODE"]
@@ -58,8 +89,6 @@ if __name__ == "__main__":
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
-
-
 
 
     # TILE INPUT IMAGE, SAVE CROPS TO FILE
@@ -97,43 +126,42 @@ if __name__ == "__main__":
 
 
 
-    # LOAD TRAINED MODEL, INFERENCE
+    # LOAD TRAINED MODEL
 
     # load model checkpoint
     teacher_net = modified_resnet18(pretrained=True).to(device)
     student_net = modified_resnet18(pretrained=False).to(device)
 
-    for param in teacher_net.parameters():
+    for param in list(teacher_net.parameters())+list(student_net.parameters()):
         param.requires_grad = False
     _ = teacher_net.eval()
     _ = student_net.eval()
 
     student_net.load_state_dict(torch.load(ckpt_path))
 
-    # inference
-    anomaly_maps = []
-    with torch.no_grad():
-        inputs = np.expand_dims(np.transpose(tiles, (0,3,1,2)), 1)
+    # INFERENCE
 
-        for i, x in enumerate(torch.Tensor(inputs)):
-            if i % 100 == 0:
-                print(f"Processing crop {i}/{len(inputs)}")
-            # forward pass
-            x = x.to(device)
-            features_t = teacher_net(x)
-            features_s = student_net(x)
+    # create dataloader
+    inputs = TensorDataset(torch.Tensor(np.transpose(tiles, (0,3,1,2))))
+    inputs_dl = DataLoader(
+        inputs,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=n_workers,
+        pin_memory=False
+    )
 
-            a_map = compute_anomaly_maps(features_s, features_t, out_size=crop_size)
-            a_map = gaussian_filter(a_map, sigma=0.5)
-            a_map = np.clip((a_map*2), 0., 1.)
-
-            anomaly_maps.append(a_map)
-
-    anomaly_maps = np.array(anomaly_maps)
-    anomaly_peaks = np.max(anomaly_maps, axis=(1,2))
-
-    print(f"Elapsed time: {(time.time()-start):2f} s")
-
+    anomaly_maps, anomaly_peaks = run_inference(
+        inputs_dl,
+        teacher_net,
+        student_net,
+        device,
+        verbose=True,
+        gauss=0.5,
+        m=2.
+    )
+    
+    print(f"Tot elapsed time: {(time.time()-start):2f} s")
 
     # run evaluation if needed
     if eval_mode:
@@ -167,12 +195,12 @@ if __name__ == "__main__":
               mode = "color_map") 
 
     # sorted arrays
-    sorted_input_images = tiles[coords[:,0].argsort()] 
+    #sorted_input_images = tiles[coords[:,0].argsort()] 
     sorted_anomaly_maps = anomaly_maps[coords[:,0].argsort()] 
     sorted_anomaly_peaks = anomaly_peaks[coords[:,0].argsort()]  
     sorted_coords = coords[coords[:,0].argsort()] 
 
-    sorted_input_images = sorted_input_images[sorted_coords[:,1].argsort(kind='mergesort')]
+    #sorted_input_images = sorted_input_images[sorted_coords[:,1].argsort(kind='mergesort')]
     sorted_anomaly_maps = sorted_anomaly_maps[sorted_coords[:,1].argsort(kind='mergesort')]
     sorted_anomaly_peaks = sorted_anomaly_peaks[sorted_coords[:,1].argsort(kind='mergesort')]
     sorted_coords = sorted_coords[sorted_coords[:,1].argsort(kind='mergesort')]
@@ -187,32 +215,17 @@ if __name__ == "__main__":
                                 os.path.join(save_path, "anomaly_hist_log.png"))
     inference.save_anomaly_hist(anomaly_peaks,
                                 os.path.join(save_path, "anomaly_hist.png"))
-        
-    inference.save_anomaly_hist_pixelwise(anomaly_maps.reshape(-1)[:],
-                                          os.path.join(save_path, "anomaly_hist_pixelwise.png"))
-
-    inference.save_anomaly_heatmap(sorted_coords,
-                                   sorted_anomaly_peaks,
-                                   os.path.join(save_path, "anomaly_heatmap.png"))
-        
     inference.save_annotated_image(image[:,:,:3],
                                    crop_size,
                                    sorted_coords,
                                    sorted_anomaly_peaks,
                                    os.path.join(save_path, "annotated_image.png"),
-                                   threshold = 0.35)
-
+                                   threshold = 0.75)
     inference.compose_anomalyImage(sorted_anomaly_maps,
                                    sorted_coords,
                                    save_path=os.path.join(save_path, "anomaly_heatmap_tot_C.png"),
                                    image_shape=[12500,12500],
                                    crop_size=crop_size,
                                    false_color=True)
-    inference.compose_anomalyImage(sorted_anomaly_maps,
-                                   sorted_coords,
-                                   save_path=os.path.join(save_path, "anomaly_heatmap_tot.png"),
-                                   image_shape=[12500,12500],
-                                   crop_size=crop_size,
-                                   false_color=False)
 
 

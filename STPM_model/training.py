@@ -92,7 +92,6 @@ def train_step(model_t,
     model_s.train() # only student model is trained
 
     for idx_batch, (x, y, mask) in enumerate(dataloader):
-        time0 = time.time()
         n_samples = len(y)
 
         # forward pass
@@ -103,11 +102,8 @@ def train_step(model_t,
         loss = total_loss(features_s, features_t)
 
         # backward pass
-        time1 = time.time()
         loss.backward()
         optimizer.step()
-
-        time2 = time.time()
 
         # log and store current values
         n_samples_super.append(n_samples)
@@ -115,8 +111,7 @@ def train_step(model_t,
 
         if log_interval>0:
             if idx_batch%log_interval==0:
-                time3 = time.time()
-                print(f"TRAIN batch {idx_batch}/{len(dataloader)} - loss: {loss} - time: {time3-time0:.4f} s (fwd: {time1-time0:.4f} s, bwd: {time2-time1:.4f} s, other: {time3-time2:.4f} s)")
+                print(f"TRAIN batch {idx_batch}/{len(dataloader)} - loss: {loss}")
 
     return {"avg_loss": np.sum(loss_super)/np.sum(n_samples_super)}
 
