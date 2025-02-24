@@ -1,16 +1,17 @@
 import os
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 from sklearn.metrics import roc_curve, precision_recall_curve, auc
 import json
 
 
-def plot_examples(dataloader, N=10, save_to=None):
+def plot_examples(dataloader, N=10, save_to=None, mean=0.5, std=0.08):
     x, y, mask = next(iter(dataloader))
     N=np.min([len(x), N])
     fig, ax = plt.subplots(ncols=N, nrows=2, figsize=(N*1.5,3), tight_layout=True)
     for i in range(N):
-        ax[0,i].imshow(np.transpose(x[i], (1,2,0))); ax[0,i].axis("off")
+        ax[0,i].imshow(np.transpose(x[i]*std+mean, (1,2,0))); ax[0,i].axis("off")
         ax[0,i].text(s=f"{y[i].numpy()}", x=10, y=10, verticalalignment="top", fontsize=14)
         ax[1,i].imshow(mask[i][0], cmap="Greys_r"); ax[1,i].axis("off")
     if save_to is not None:
@@ -29,14 +30,52 @@ def plot_examples_histograms(dataloader, N=4, save_to=None):
         fig.savefig(save_to)
 
 
-def plot_training_loss(train_dict, save_to=None):
-    fig, ax = plt.subplots(figsize=(5,4))
-    ax.set_title("train (blue) and val (orange) losses during training")
-    ax.plot(train_dict["losses_train"], c="tab:blue")
-    ax.plot(train_dict["losses_val"], c="tab:orange")
+def plot_training_losses(train_dict, save_to=None):
+
+    fig, ax = plt.subplots(figsize=(9,5), tight_layout=True)
+    ax.set_title("Training losses")
+
+    loss_train = ax.plot(train_dict["losses_train"]["loss"],
+                          c="tab:blue", linestyle='--', alpha=0.7)
+    loss_val = ax.plot(train_dict["losses_val"]["loss"],
+                        c="tab:orange", label="val reco", linestyle='--', alpha=0.7)
+    loss_aux_train = ax.plot(train_dict["losses_train"]["loss_aux"],
+                                c="tab:blue", linestyle=':', alpha=0.7)
+    loss_aux_val = ax.plot(train_dict["losses_val"]["loss_aux"],
+                            c="tab:orange", linestyle=':', alpha=0.7)
+    loss_tot_train = ax.plot(train_dict["losses_train"]["loss_tot"], c="tab:blue")
+    loss_tot_val = ax.plot(train_dict["losses_val"]["loss_tot"], c="tab:orange")
+
     ax.set_yscale("log")
     ax.set_xlabel("epochs")
     ax.set_ylabel("loss")
+
+    # twin axis for learning rate
+    ax2 = ax.twinx()
+    ax2.set_ylabel("learning rate")
+    lr = ax2.plot(train_dict["LRs"], c="grey", linestyle="-", alpha=0.8)
+
+    if "AUROCs" in train_dict.keys():
+        # second twin axis for auroc
+        ax3 = ax.twinx()
+        ax3.spines["right"].set_position(("axes", 1.25))
+        ax3.set_ylim([0.5,1])
+        ax3.set_ylabel("AUROC")
+        auroc = ax3.plot(train_dict["AUROCs"], c="tab:red", linestyle="-", alpha=0.8)
+
+    # add entries to the legend
+    add_entries = [Line2D([0], [0], color="black", linestyle="-", label="total"),
+                   Line2D([0], [0], color="black", linestyle="--", label="reco"),
+                   Line2D([0], [0], color="black", linestyle=":", label="aux")]
+    
+    entries = [loss_tot_train[0], loss_tot_val[0]] + add_entries + lr
+    labels = ["training", "validation", "loss total", "loss reco", "loss aux", "LR"]
+    if "AUROCs" in train_dict.keys():
+        entries += auroc
+        labels += ["AUROC"]
+
+    ax.legend(entries, labels, loc="center right")
+
     if save_to is not None:
         fig.savefig(save_to)
 
@@ -154,7 +193,7 @@ def plot_results_examples(results, N=10, save_to=None):
     fig1, ax1 = plt.subplots(ncols=N_0, nrows=3, figsize=(N_0*1.3, 3.9), tight_layout=True)
     for i in range(N_0):
         idx = idxs_0[i]
-        ax1[0,i].imshow(results["inputs"][idx][0], cmap="Greys_r", vmin=0., vmax=1.)
+        ax1[0,i].imshow(results["inputs"][idx][0]*0.08+0.5, cmap="Greys_r", vmin=0., vmax=1.)
         ax1[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
         ax1[1,i].imshow(results["masks"][idx], cmap="Greys_r")
         ax1[2,i].imshow(results["anomaly_maps"][idx], cmap="jet", vmin=vmin, vmax=vmax)
@@ -167,7 +206,7 @@ def plot_results_examples(results, N=10, save_to=None):
     fig2, ax2 = plt.subplots(ncols=N_1, nrows=3, figsize=(N_1*1.3, 3.9), tight_layout=True)
     for i in range(N_1):
         idx = idxs_1[i]
-        ax2[0,i].imshow(results["inputs"][idx][0], cmap="Greys_r", vmin=0., vmax=1.)
+        ax2[0,i].imshow(results["inputs"][idx][0]*0.08+0.5, cmap="Greys_r", vmin=0., vmax=1.)
         ax2[0,i].text(s=f"{results['labels'][idx]}", x=10, y=10, verticalalignment="top", fontsize=14)
         ax2[1,i].imshow(results["masks"][idx], cmap="Greys_r")
         ax2[2,i].imshow(results["anomaly_maps"][idx], cmap="jet", vmin=vmin, vmax=vmax)
@@ -200,7 +239,7 @@ def plot_worst_results_examples(results, N=10, save_to=None):
     splitted = os.path.splitext(save_to)
 
     for label in [0,1]:
-        inputs = results["inputs"][results["labels"]==label]
+        inputs = results["inputs"][results["labels"]==label]*0.08+0.5
         anomaly_maps = results["anomaly_maps"][results["labels"]==label]
         peaks = np.max(anomaly_maps, axis=(1,2))
         masks = results["masks"][results["labels"]==label]
@@ -234,7 +273,7 @@ def plot_best_results_examples(results, N=10, save_to=None):
     splitted = os.path.splitext(save_to)
 
     for label in [0,1]:
-        inputs = results["inputs"][results["labels"]==label]
+        inputs = results["inputs"][results["labels"]==label]*0.08+0.5
         anomaly_maps = results["anomaly_maps"][results["labels"]==label]
         peaks = np.max(anomaly_maps, axis=(1,2))
         masks = results["masks"][results["labels"]==label]

@@ -7,8 +7,8 @@ import argparse
 import torch
 
 from STPM_model import utils
-from STPM_model.dataset import FilterClothsDataset
-from STPM_model.model import modified_resnet18
+from STPM_model.dataset import FilterClothsDataset, custom_collate_function
+from STPM_model.model import model_selector
 from STPM_model.training import test_student_model
 
 
@@ -46,7 +46,8 @@ def test_model():
     if not os.path.isdir(save_path):
         os.mkdir(save_path)
     name_train = params["NAME_TRAIN"]
-    out_features = [f.strip() for f in params["OUT_FEATURES"].split(",")]
+    model_name = params["MODEL_NAME"]
+    out_features = [int(f.strip()) for f in params["OUT_FEATURES"].split(",")]
 
     device = params["DEVICE"] if torch.cuda.is_available() else "cpu"
     print(f"Running on device: {device}")
@@ -64,16 +65,21 @@ def test_model():
     print(f"Test ds size: {len(test_ds)}")
 
     # dataloaders
+    persistent_workers = True if num_workers>0 else False
     test_dl = torch.utils.data.DataLoader(test_ds,
                                           batch_size=batch_size,
                                           shuffle=False,
-                                          num_workers=0,
-                                          pin_memory=False)
+                                          num_workers=num_workers,
+                                          persistent_workers=persistent_workers,
+                                          collate_fn=custom_collate_function,
+                                          pin_memory=pin_memory)
     
     # instantiate models
     print("Instantiating models...")
-    teacher_net = modified_resnet18(pretrained=True, out_features=out_features).to(device)
-    student_net = modified_resnet18(pretrained=False, out_features=out_features).to(device)
+    teacher_net = model_selector(
+        model_name, pretrained=True).to(device)
+    student_net = model_selector(
+        model_name, pretrained=False).to(device)
 
     if os.path.isfile(checkpoint):
         student_net.load_state_dict(torch.load(checkpoint))
@@ -88,6 +94,7 @@ def test_model():
     print("Testing...")
     results = test_student_model(teacher_net,
                                  student_net,
+                                 out_features,
                                  test_dl,
                                  device)
     # save avg anomaly and peak anomaly histograms to file
@@ -97,9 +104,9 @@ def test_model():
 
 
     # save examples of heatmaps
-    utils.plot_results_examples(results, N=20, save_to=os.path.join(save_path, "results_examples.png"))
-    utils.plot_best_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_best.png"))
-    utils.plot_worst_results_examples(results, N=25, save_to=os.path.join(save_path, "results_examples_worst.png"))
+    utils.plot_results_examples(results, N=10, save_to=os.path.join(save_path, "results_examples.png"))
+    utils.plot_best_results_examples(results, N=10, save_to=os.path.join(save_path, "results_examples_best.png"))
+    utils.plot_worst_results_examples(results, N=10, save_to=os.path.join(save_path, "results_examples_worst.png"))
 
 
 if __name__ == "__main__":

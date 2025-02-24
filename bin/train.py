@@ -7,8 +7,8 @@ import argparse
 import torch
 
 from STPM_model import utils
-from STPM_model.dataset import FilterClothsDataset
-from STPM_model.model import modified_resnet18
+from STPM_model.dataset import FilterClothsDataset, custom_collate_function, ImagenetteDataset, InfiniteDataLoader
+from STPM_model.model import model_selector
 from STPM_model.training import train_loop, test_student_model
 
 
@@ -36,8 +36,11 @@ def train_model():
     # setup input arguments
     params = setupArgs()["TRAINING"]
     
-    data_path = params["DATA_PATH"]
-    batch_size = int(params["BATCH_SIZE"])
+    data_path = params["DATA_PATH"].strip()
+    auxilary_data_path = params["AUXILARY_DATA_PATH"].strip()
+    batch_size_train = int(params["BATCH_SIZE_TRAIN"])
+    batch_size_val = int(params["BATCH_SIZE_VAL"])
+    batch_size_aux = int(params["BATCH_SIZE_AUX"])
     crop_size = int(params["CROP_SIZE"])
     checkpoint = params["CHECKPOINT_PATH"]
     num_workers = int(params["N_WORKERS"])
@@ -46,8 +49,11 @@ def train_model():
     if not os.path.isdir(save_path):
         os.mkdir(save_path)
     name_train = params["NAME_TRAIN"]
+    model_name = params["MODEL_NAME"]
     num_epochs = int(params["N_EPOCHS"])
-    out_features = [f.strip() for f in params["OUT_FEATURES"].split(",")]
+    limit_train_batches = int(params["LIMIT_TRAIN_BATCHES"])
+    out_features_train = [int(f.strip()) for f in params["OUT_FEATURES_TRAIN"].split(",")]
+    out_features_test = [int(f.strip()) for f in params["OUT_FEATURES_TEST"].split(",")]
     lr = float(params["LR"])
     lr_scheduler_steps = [int(s) for s in params["LR_SCHEDULER_STEPS"].split(",")]
     gamma = float(params["LR_SCHEDULER_GAMMA"])
@@ -58,7 +64,6 @@ def train_model():
     # save configuration file
     utils.save_config_info(os.path.join(save_path, "TRAIN_CONFIG.txt"), dict(params))
 
-    # instantiate train and test datasets
     print("Creating datasets and dataloaders...")
     train_ds_tot = FilterClothsDataset(data_path,
                                        is_train=True,
@@ -77,37 +82,69 @@ def train_model():
     train_num = img_nums - valid_num
     train_ds, val_ds = torch.utils.data.random_split(train_ds_tot, [train_num, valid_num])
 
+    if len(auxilary_data_path)>0:
+        auxilary_ds = ImagenetteDataset(
+            data_path=auxilary_data_path, resize=crop_size,
+            seed=42, max_samples=9999, prefetch=False
+        )
+        print(f"Auxilary ds size: {len(auxilary_ds)}")
+
+
     print(f"Train/val ds sizes: {len(train_ds)}/{len(val_ds)}")
     print(f"Test ds size: {len(test_ds)}")
 
     # dataloaders
+    persistent_workers = True if num_workers>0 else False
     train_dl = torch.utils.data.DataLoader(train_ds,
-                                           batch_size=batch_size,
+                                           batch_size=batch_size_train,
                                            shuffle=True,
                                            num_workers=num_workers,
+                                           persistent_workers=persistent_workers,
+                                           collate_fn=custom_collate_function,
                                            pin_memory=pin_memory)
     val_dl = torch.utils.data.DataLoader(val_ds,
-                                         batch_size=batch_size,
+                                         batch_size=batch_size_val,
                                          shuffle=False,
                                          num_workers=num_workers,
+                                         persistent_workers=persistent_workers,
+                                         collate_fn=custom_collate_function,
                                          pin_memory=pin_memory)
     test_dl = torch.utils.data.DataLoader(test_ds,
-                                          batch_size=batch_size,
+                                          batch_size=batch_size_val,
                                           shuffle=False,
-                                          num_workers=0,
-                                          pin_memory=False)
+                                          num_workers=num_workers,
+                                          persistent_workers=persistent_workers,
+                                          collate_fn=custom_collate_function,
+                                          pin_memory=pin_memory)
+    if len(auxilary_data_path)>0:
+        auxilary_dl = InfiniteDataLoader(
+            torch.utils.data.DataLoader(auxilary_ds,
+                                        batch_size=batch_size_aux,
+                                        shuffle=True,
+                                        num_workers=num_workers,
+                                        persistent_workers=persistent_workers,
+                                        pin_memory=pin_memory))
+    else:
+        auxilary_dl = None
+        print("No auxilary data provided")
 
     # plot some examples and histograms
     utils.plot_examples(train_dl, N=8, save_to=os.path.join(save_path, "examples_train_dl.png"))
     utils.plot_examples(test_dl, N=8, save_to=os.path.join(save_path, "examples_test_dl.png"))
-    #utils.plot_examples_histograms(train_dl, N=4, save_to=os.path.join(save_path, "examplesHist_train_dl.png"))
-    #utils.plot_examples_histograms(test_dl, N=4, save_to=os.path.join(save_path, "examplesHist_test_dl.png"))
+    utils.plot_examples_histograms(train_dl, N=4, save_to=os.path.join(save_path, "examplesHist_train_dl.png"))
+    utils.plot_examples_histograms(test_dl, N=4, save_to=os.path.join(save_path, "examplesHist_test_dl.png"))
+    if len(auxilary_data_path)>0:
+        utils.plot_examples(auxilary_dl, N=8, save_to=os.path.join(save_path, "examples_auxilary_dl.png"), mean=0.446, std=0.224)
+        utils.plot_examples_histograms(auxilary_dl, N=4, save_to=os.path.join(save_path, "examplesHist_auxilary_dl.png"))
 
 
     # instantiate models
     print("Instantiating models...")
-    teacher_net = modified_resnet18(pretrained=True, out_features=out_features).to(device)
-    student_net = modified_resnet18(pretrained=False, out_features=out_features).to(device)
+    teacher_net = model_selector(
+        model_name, pretrained=True).to(device)
+    student_net = model_selector(
+        model_name, pretrained=False).to(device)
+    print(f"N. parameters student model: {sum(p.numel() for p in student_net.parameters())/1e6:.2f}M")
 
     if len(checkpoint)>0:
         if os.path.isfile(checkpoint):
@@ -127,14 +164,19 @@ def train_model():
     optimizer = torch.optim.Adam(student_net.parameters(),
                                  lr=lr,
                                  weight_decay=0.0001)
-    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-                                                        lr_scheduler_steps,
-                                                        gamma=gamma)
+    n_effective_updates = min(len(train_dl), limit_train_batches) * num_epochs
+    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr,
+                                                    total_steps=n_effective_updates,
+                                                    pct_start=0.2)
+    #lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+    #                                                    lr_scheduler_steps,
+    #                                                    gamma=gamma)
 
 
     # start training
     train_dict = train_loop(teacher_net,
                             student_net,
+                            out_features_train,
                             train_dl,
                             val_dl,
                             device,
@@ -142,16 +184,20 @@ def train_model():
                             optimizer,
                             name_train,
                             save_path,
-                            log_interval=10,
+                            test_loader=test_dl,
+                            log_interval=1,
                             lr_scheduler=lr_scheduler,
-                            verbose=True)
-    utils.plot_training_loss(train_dict, save_to=os.path.join(save_path, "training_loss.png"))
+                            limit_train_batches=limit_train_batches,
+                            verbose=True,
+                            auxilary_dl=auxilary_dl)
+    utils.plot_training_losses(train_dict, save_to=os.path.join(save_path, "training_loss.png"))
 
     student_net.load_state_dict(torch.load(os.path.join(save_path, f"checkpoints/{name_train}.ckpt")))
 
     # test
     results = test_student_model(teacher_net,
                                  student_net,
+                                 out_features_test,
                                  test_dl,
                                  device)
     # save avg anomaly and peak anomaly histograms to file

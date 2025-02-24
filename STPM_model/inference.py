@@ -11,6 +11,7 @@ from preprocessing_tele.dataset import conditionalMkDir
 
 def tile_input_image(name: str,
                      root_path: str,
+                     suffix: str = "png",
                      size: int = 224, 
                      overlap: int = 0,
                      scale: float = 1.,
@@ -23,7 +24,7 @@ def tile_input_image(name: str,
                      ):
     
     print("Tiling image")
-    object = multiChannelImage(name, root_path)
+    object = multiChannelImage(name, root_path, suffix)
     # images
     image = object.image_mode_selector(mode=mode,
                                        scale=scale,

@@ -45,8 +45,6 @@ def run_inference(dataloader, teacher_net, student_net, device, verbose=True, ga
     anomaly_maps = []
     with torch.no_grad():
         for i, (x,) in enumerate(dataloader):
-            if (i % (len(dataloader)//10)) == 0 and verbose:
-                print(f"Processing crop {i}/{len(dataloader)}")
             # forward pass
             x = x.to(device)
             features_t = teacher_net(x)
@@ -58,7 +56,7 @@ def run_inference(dataloader, teacher_net, student_net, device, verbose=True, ga
 
             anomaly_maps.append(a_map)
 
-    anomaly_maps = np.concatenate(anomaly_maps)
+    anomaly_maps = np.concatenate(anomaly_maps, axis=0)
     anomaly_peaks = np.max(anomaly_maps, axis=(1,2))
 
     print(f"run_inference() elapsed time: {(time.time()-start):2f} s")
@@ -75,6 +73,7 @@ if __name__ == "__main__":
     ckpt_path = params["CKPT_PATH"]
     input_path = params["INPUT_PATH"]
     input_name = params["INPUT_NAME"]
+    suffix = params["SUFFIX"]
     save_path = params["SAVE_PATH"]
     batch_size = int(params["BATCH_SIZE"])
     n_workers = int(params["N_WORKERS"])
@@ -94,6 +93,7 @@ if __name__ == "__main__":
     # TILE INPUT IMAGE, SAVE CROPS TO FILE
     tiles, coords, image = inference.tile_input_image(name = input_name,
                                                       root_path = input_path,
+                                                      suffix = suffix,
                                                       size = crop_size,
                                                       overlap = overlap,
                                                       scale = 1.,
@@ -220,7 +220,7 @@ if __name__ == "__main__":
                                    sorted_coords,
                                    sorted_anomaly_peaks,
                                    os.path.join(save_path, "annotated_image.png"),
-                                   threshold = 0.75)
+                                   threshold = 0.5)
     inference.compose_anomalyImage(sorted_anomaly_maps,
                                    sorted_coords,
                                    save_path=os.path.join(save_path, "anomaly_heatmap_tot_C.png"),
